@@ -5,6 +5,9 @@
   "private": true,
   "scripts": {
     "build": "tsc",
+    "start:api": "tsx src/phase4/api.ts",
+    "start:dispatcher": "tsx src/phase4/dispatcher.ts",
+    "start:worker": "tsx src/phase4/worker.ts",
     "start:phase4": "tsx src/phase4/worker.ts"
   },
   "dependencies": {
@@ -26,3 +29,4 @@
     "typescript": "^5.7.2"
   }
 }
+
