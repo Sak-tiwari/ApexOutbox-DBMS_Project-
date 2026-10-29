@@ -46,7 +46,7 @@ app.post("/api/phase4/onboard", async (req, res) => {
       try {
         invoice = await Invoice.create({
           idempotencyKey,
-          invoiceNumber: `INV-${data.leadId.replace(/[^a-zA-Z0-9]/g, "").slice(-12) || "NEW"}`,
+          invoiceNumber: `INV-${new mongoose.Types.ObjectId().toString()}`,
           clientId: client._id,
           snapshot: {
             clientName: data.clientName,
