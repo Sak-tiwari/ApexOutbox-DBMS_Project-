@@ -23,7 +23,12 @@ const OutboxSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["PENDING", "PROCESSING", "PUBLISHED"],
+      enum: [
+        "PENDING",
+        "PROCESSING",
+        "PUBLISHED",
+        "FAILED"
+      ],
       default: "PENDING",
       index: true
     },
@@ -60,12 +65,16 @@ export async function recordOnboardingEvent(
         eventType: "INVOICE_CREATED",
         aggregateId: invoiceId,
         payload: { invoiceId },
-        status: "PENDING"
+        status: "PENDING",
+        attempts: 0,
+        lastError: "",
+        publishedAt: null
       }
     },
     {
       upsert: true,
-      new: true
+      new: true,
+      runValidators: true
     }
   );
 }
