@@ -8,18 +8,20 @@ import { generateInvoicePDF } from "./invoice";
 import { sendInvoiceEmail } from "./email";
 
 async function main() {
-  if (!process.env.MONGODB_URI || !process.env.REDIS_URL) {
+  const mongoUri = process.env.MONGODB_URI;
+  const redisUrl = process.env.REDIS_URL;
+
+  if (!mongoUri || !redisUrl) {
     throw new Error(
       "MONGODB_URI and REDIS_URL must be configured"
     );
   }
 
-  await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(mongoUri);
 
-  const connection = new IORedis(
-    process.env.REDIS_URL,
-    { maxRetriesPerRequest: null }
-  );
+  const connection = new IORedis(redisUrl, {
+    maxRetriesPerRequest: null
+  });
 
   const worker = new Worker(
     "client-onboarding",
@@ -38,16 +40,18 @@ async function main() {
 
       try {
         if (!invoice.pdfPath) {
-          invoice.pdfPath = await generateInvoicePDF(
+          const pdfPath = await generateInvoicePDF(
             invoice.invoiceNumber,
             invoice.snapshot
           );
 
+          invoice.pdfPath = pdfPath;
           invoice.status = "PDF_READY";
           await invoice.save();
         }
 
         invoice.emailAttempts += 1;
+        invoice.status = "PDF_READY";
         await invoice.save();
 
         const result = await sendInvoiceEmail({
@@ -60,7 +64,6 @@ async function main() {
         invoice.emailMessageId = result.messageId;
         invoice.status = "EMAIL_SENT";
         invoice.lastError = "";
-
         await invoice.save();
 
         return {
@@ -96,6 +99,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error("Worker startup failed:", error);
   process.exit(1);
 });
+
