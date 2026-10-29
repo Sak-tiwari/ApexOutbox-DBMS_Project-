@@ -8,7 +8,8 @@
     "start:api": "tsx src/phase4/api.ts",
     "start:dispatcher": "tsx src/phase4/dispatcher.ts",
     "start:worker": "tsx src/phase4/worker.ts",
-    "start:phase4": "tsx src/phase4/worker.ts"
+    "start:phase4": "npm run start:api",
+    "start:phase4:all": "npm run start:api & npm run start:dispatcher & npm run start:worker"
   },
   "dependencies": {
     "bullmq": "^5.34.3",
