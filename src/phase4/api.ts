@@ -4,7 +4,7 @@ import express from "express";
 import mongoose from "mongoose";
 import { Client, Invoice } from "./models";
 import { validateOnboarding, getInvoiceIdempotencyKey } from "./onboarding";
-import { enqueueInvoiceJob } from "./queue";
+import { recordOnboardingEvent } from "./outbox";
 
 const app = express();
 app.use(express.json());
@@ -64,9 +64,9 @@ app.post("/api/phase4/onboard", async (req, res) => {
       }
     }
 
-    if (invoice.status !== "EMAIL_SENT") {
-      await enqueueInvoiceJob(String(invoice._id));
-    }
+    if (invoice.status === "PENDING") {
+  await recordOnboardingEvent(String(invoice._id));
+}
 
     return res.status(202).json({
       message: "Onboarding request accepted",
