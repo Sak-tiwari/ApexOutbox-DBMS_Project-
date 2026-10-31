@@ -1,0 +1,37 @@
+{
+  "name": "apexoutbox",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ApexOutbox - lead scraping, sales pipeline and transactional-outbox client onboarding (DBMS project, Phase 1 foundation)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:api": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start:api": "node dist/server.js",
+    "start:worker": "node dist/worker.js"
+  },
+  "dependencies": {
+    "bullmq": "^6.5.2",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "ioredis": "^6.0.0",
+    "mongoose": "^9.11.4",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
