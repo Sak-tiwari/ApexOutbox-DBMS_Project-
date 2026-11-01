@@ -1,9 +1,12 @@
 import { CheerioCrawler } from "crawlee";
 import { writeFile } from "node:fs/promises";
 import mongoose from "mongoose";
+
 import { connectDB } from "../config/database";
 import { saveLeads } from "../lead-ingestion.service";
 import { isSafeUrl } from "../utils/safe-url";
+import { ScrapeJob } from "../models/ScrapeJob";
+import { genericHtmlAdapter } from "./generic-html.adapter";
 
 type LeadData = {
   website: string;
@@ -15,21 +18,27 @@ type LeadData = {
 
 async function scrapeLeads() {
   let databaseConnected = false;
+  let jobId: mongoose.Types.ObjectId | null = null;
 
   try {
     const inputUrl = process.argv[2] || "https://example.com";
 
-    // Validate URL before scraping
-    const safe = await isSafeUrl(inputUrl);
-
-    if (!safe) {
-      throw new Error("Unsafe or invalid URL. Scraping stopped.");
+    if (!(await isSafeUrl(inputUrl))) {
+      throw new Error("Unsafe or invalid URL");
     }
 
     const url = new URL(inputUrl).toString();
 
-    console.log("Starting Crawlee Lead Scraper...");
-    console.log("Website:", url);
+    await connectDB();
+    databaseConnected = true;
+
+    const job = await ScrapeJob.create({
+      targetUrl: url,
+      status: "running",
+      totalRequests: 1
+    });
+
+    jobId = job._id;
 
     let leadData: LeadData | null = null;
 
@@ -41,70 +50,78 @@ async function scrapeLeads() {
       async requestHandler({ request, $ }) {
         const html = $.html() || "";
 
-        const title =
-          $("title").first().text().trim() || "Unknown Website";
-
-        const emails = [
-          ...new Set(
-            html.match(
-              /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi
-            ) || []
-          )
-        ];
-
-        leadData = {
-          website: request.url,
-          title,
-          emails,
-          source: "Crawlee CheerioCrawler",
-          scrapedAt: new Date().toISOString()
-        };
+        leadData = genericHtmlAdapter.extract(html, request.url);
 
         console.log("Page extracted successfully.");
-        console.log("Emails found:", emails.length);
+        console.log("Emails found:", leadData.emails.length);
       },
 
-      failedRequestHandler({ request }, error) {
-        console.error("Request failed:", request.url);
-        console.error("Error:", error.message);
+      
+
+     async errorHandler(_context, error) {
+  if (jobId) {
+    await ScrapeJob.updateOne(
+      { _id: jobId },
+      {
+        $inc: { retries: 1 },
+        $push: {
+          errorMessages:
+            error instanceof Error ? error.message : String(error)
+        }
       }
+    );
+  }
+},
     });
 
     await crawler.run([url]);
 
-    const extractedData = leadData as LeadData | null;
+    const extracted = leadData;
 
-    if (!extractedData) {
-      throw new Error("No lead data was extracted.");
+    if (!extracted) {
+      throw new Error("No lead data extracted");
     }
 
     await writeFile(
       "leads.json",
-      JSON.stringify(extractedData, null, 2),
+      JSON.stringify(extracted, null, 2),
       "utf-8"
     );
 
-    console.log("Data saved in leads.json");
+    await saveLeads(extracted);
 
-    if (extractedData.emails.length > 0) {
-      await connectDB();
-      databaseConnected = true;
+    await ScrapeJob.updateOne(
+      { _id: jobId },
+      {
+        $set: {
+          status: "completed",
+          successfulRequests: 1,
+          finishedAt: new Date()
+        }
+      }
+    );
 
-      await saveLeads(extractedData);
-
-      console.log("Leads saved successfully in MongoDB!");
-    } else {
-      console.log("No emails found. Nothing to save in MongoDB.");
-    }
-
-    console.log("Scraping completed!");
-    console.log(extractedData);
+    console.log("Lead saved and job completed!");
+    console.log(extracted);
 
   } catch (error) {
-    console.error(
-      "Scraping failed:",
-      error instanceof Error ? error.message : error
-    );
+    console.error("Scraping failed:", error);
+
+    if (jobId) {
+      await ScrapeJob.updateOne(
+        { _id: jobId },
+        {
+          $set: {
+            status: "failed",
+            finishedAt: new Date()
+          },
+          $push: {
+            errorMessages:
+              error instanceof Error ? error.message : String(error)
+          }
+        }
+      );
+    }
 
     process.exitCode = 1;
 
