@@ -1,3 +1,11 @@
+*** STATUS NOTE (added after Phase 5) ***
+This is the original Phase 1 DESIGN. The built application on branch Phase-5 differs from it on purpose:
+no tenantId and no replica set / transactions (single-document atomic updates and unique indexes are used instead),
+Phase 3's pipeline rules, API-key auth, JSON body field names (targetState, version), and a different folder layout.
+Where this document and Phase-5's docs/phase5/*.md disagree, the Phase-5 docs describe what actually runs.
+Still true here: the outbox idea, idempotency by unique indexes, "uncertain" email outcomes, and the decision log's reasoning.
+**********************************************
+
 =====================================================================
  ApexOutbox (DBMS Project) - PHASE 1: ARCHITECTURE & FOUNDATION
 =====================================================================

@@ -1,0 +1,80 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createApp = createApp;
+const express_1 = __importDefault(require("express"));
+const node_crypto_1 = require("node:crypto");
+const errors_1 = require("./errors");
+const auth_1 = require("./middleware/auth");
+const rateLimit_1 = require("./middleware/rateLimit");
+const leadRoutes_1 = require("./routes/leadRoutes");
+const api_1 = require("./phase4/api");
+async function probe(fn) {
+    try {
+        return await Promise.race([
+            Promise.resolve(fn()),
+            new Promise((resolve) => setTimeout(() => resolve(false), 2000)),
+        ]);
+    }
+    catch {
+        return false;
+    }
+}
+function createApp(deps) {
+    const app = (0, express_1.default)();
+    app.disable('x-powered-by');
+    app.use(express_1.default.json({ limit: '100kb' }));
+    // Request id + access log + request counter.
+    app.use((req, res, next) => {
+        const id = req.header('x-request-id') || (0, node_crypto_1.randomUUID)();
+        res.setHeader('x-request-id', id);
+        const started = Date.now();
+        res.on('finish', () => {
+            deps.metrics.inc('apexoutbox_http_requests_total', { status: `${Math.floor(res.statusCode / 100)}xx` });
+            deps.log.info({ id, method: req.method, path: req.path, status: res.statusCode, ms: Date.now() - started }, 'request');
+        });
+        next();
+    });
+    app.get('/', (_req, res) => {
+        res.json({ message: 'ApexOutbox API is running' });
+    });
+    // Liveness: process is up. Never touches dependencies.
+    app.get('/health', (_req, res) => {
+        res.json({ status: 'OK' });
+    });
+    // Readiness: dependencies reachable. Point load balancers here.
+    app.get('/ready', async (_req, res) => {
+        const [mongo, redis] = await Promise.all([probe(deps.checks.mongo), probe(deps.checks.redis)]);
+        const ready = mongo && redis;
+        res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'degraded', checks: { mongo: mongo ? 'up' : 'down', redis: redis ? 'up' : 'down' } });
+    });
+    const auth = (0, auth_1.apiKeyAuth)(deps.apiKeys);
+    app.get('/metrics', auth, async (_req, res) => {
+        res.type('text/plain').send(await deps.metrics.render(deps.gauges));
+    });
+    app.use('/api', (0, rateLimit_1.rateLimit)({ limit: deps.rateLimitPerMinute ?? 0 }));
+    app.use('/api/leads', auth, (0, leadRoutes_1.createLeadRouter)(deps));
+    app.use('/api/phase4', auth, (0, api_1.createOnboardingRouter)());
+    app.use((_req, res) => {
+        res.status(404).json({ success: false, error: 'Route not found', code: 'NOT_FOUND' });
+    });
+    const errorHandler = (err, req, res, _next) => {
+        if (err instanceof errors_1.AppError) {
+            return res.status(err.status).json({ success: false, error: err.message, code: err.code, ...(err.details ? { details: err.details } : {}) });
+        }
+        if (err?.type === 'entity.parse.failed') {
+            return res.status(400).json({ success: false, error: 'Request body is not valid JSON', code: 'VALIDATION_ERROR' });
+        }
+        if (err?.type === 'entity.too.large') {
+            return res.status(413).json({ success: false, error: 'Request body too large', code: 'PAYLOAD_TOO_LARGE' });
+        }
+        // Unknown error: log the detail, never send it to the client.
+        deps.log.error({ error: String(err), path: req.path }, 'unhandled error');
+        return res.status(500).json({ success: false, error: 'Internal server error', code: 'INTERNAL' });
+    };
+    app.use(errorHandler);
+    return app;
+}
+//# sourceMappingURL=app.js.map
