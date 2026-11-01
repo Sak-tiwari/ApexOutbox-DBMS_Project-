@@ -117,3 +117,45 @@ describe("invoice processor", () => {
     expect(store.invoices.get("i1")!.status).toBe("PENDING");
   });
 });
+
+import { EmailPermanentError, isPermanentSmtpError } from "../../src/phase4/email";
+
+describe("invoice processor: recovery and permanent failures", () => {
+  it("repairs an invoice left PENDING with a pdfPath (crash between the two old writes)", async () => {
+    const { store, deps, sent } = setup();
+    store.invoices.get("i1")!.pdfPath = "/pdf/old.pdf";
+    const r = await processInvoiceJob("i1", deps);
+    expect(r.outcome).toBe("sent");
+    expect(sent).toHaveLength(1);
+    expect(store.invoices.get("i1")!.pdfPath).toBe("/pdf/old.pdf");
+  });
+
+  it("a permanent rejection (bounce) abandons the invoice at once and is not retried", async () => {
+    let calls = 0;
+    const { store, deps } = setup(async () => { calls++; throw new EmailPermanentError("550 no such user"); });
+    const r = await processInvoiceJob("i1", deps);
+    expect(r.outcome).toBe("abandoned");
+    expect(store.invoices.get("i1")!.status).toBe("EMAIL_ABANDONED");
+    expect(await processInvoiceJob("i1", deps)).toEqual({ outcome: "skipped", reason: "abandoned" });
+    expect(calls).toBe(1);
+  });
+
+  it("transient failures stop after maxEmailAttempts and the invoice is abandoned", async () => {
+    let calls = 0;
+    const { store, deps } = setup(async () => { calls++; throw new Error("451 try later"); });
+    deps.maxEmailAttempts = 3;
+    for (let i = 0; i < 3; i++) await expect(processInvoiceJob("i1", deps)).rejects.toThrow("451");
+    expect(store.invoices.get("i1")!.status).toBe("EMAIL_FAILED");
+    const r = await processInvoiceJob("i1", deps);
+    expect(r.outcome).toBe("abandoned");
+    expect(store.invoices.get("i1")!.status).toBe("EMAIL_ABANDONED");
+    expect(calls).toBe(3);
+  });
+
+  it("classifies SMTP 5xx and EENVELOPE as permanent, 4xx and auth as not", () => {
+    expect(isPermanentSmtpError({ responseCode: 550 })).toBe(true);
+    expect(isPermanentSmtpError({ code: "EENVELOPE" })).toBe(true);
+    expect(isPermanentSmtpError({ responseCode: 451 })).toBe(false);
+    expect(isPermanentSmtpError({ code: "EAUTH" })).toBe(false);
+  });
+});

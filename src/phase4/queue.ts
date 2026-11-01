@@ -54,6 +54,13 @@ export function createQueueClient(redisUrl: string): QueueClient {
         await job.retry();
         return "retried";
       }
+      if (await job.isCompleted()) {
+        // The job finished but the invoice is still unsent (e.g. it was skipped as in-progress). A completed
+        // job id blocks re-adding, so drop it and add a fresh one.
+        await job.remove();
+        await queue.add("process-invoice", { invoiceId }, { jobId: `invoice-${invoiceId}` });
+        return "created";
+      }
       return "already-queued";
     },
     close: async () => {

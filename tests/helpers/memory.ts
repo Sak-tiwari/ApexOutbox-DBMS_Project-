@@ -1,6 +1,6 @@
 import type { IActivityLog, IDeal, OnboardingStatus } from "../../src/models/Lead";
 import type { InvoiceRecord, InvoiceStore, OutboxRecord, OutboxStore } from "../../src/phase4/ports";
-import type { LeadRecord, LeadStore, TransitionWrite } from "../../src/stores/types";
+import type { LeadRecord, LeadStore, ListLeadsQuery, NewLead, TransitionWrite } from "../../src/stores/types";
 
 /**
  * In-memory stores that obey the same atomicity rules as the Mongo stores
@@ -35,6 +35,24 @@ export class MemoryLeadStore implements LeadStore {
     }
     return structuredClone(l);
   }
+  private seq = 0;
+  async list(q: ListLeadsQuery) {
+    let all = [...this.leads.values()].sort((a, b) => (a.id < b.id ? -1 : 1));
+    if (q.ownerId) all = all.filter((l) => l.ownerId === q.ownerId);
+    if (q.state) all = all.filter((l) => l.currentState === q.state);
+    if (q.followUpBefore) all = all.filter((l) => l.followUpDate && l.followUpDate <= q.followUpBefore!);
+    if (q.followUpAfter) all = all.filter((l) => l.followUpDate && l.followUpDate >= q.followUpAfter!);
+    if (q.after) all = all.filter((l) => l.id > q.after!);
+    const page = all.slice(0, q.limit).map((l) => structuredClone(l));
+    return { items: page, nextCursor: all.length > q.limit ? page[page.length - 1].id : null };
+  }
+  async create(l: NewLead) {
+    return structuredClone(this.seed({ id: `N${String(++this.seq).padStart(4, "0")}`, name: l.name, company: l.company, ownerId: l.ownerId, followUpDate: l.followUpDate }));
+  }
+  async cancelPendingOnboarding(id: string) {
+    const l = this.leads.get(id);
+    if (l && l.onboardingStatus === "PENDING" && l.currentState !== "Closed-Won") { l.onboardingStatus = "CANCELLED"; l.onboardingError = "Lead left Closed-Won before onboarding finished"; }
+  }
   async findOnboardingPending(limit: number) {
     return [...this.leads.values()].filter((l) => l.onboardingStatus === "PENDING" && l.currentState === "Closed-Won").slice(0, limit).map((l) => structuredClone(l));
   }
@@ -61,7 +79,9 @@ export class MemoryInvoiceStore implements InvoiceStore {
   private touch(i: InvoiceRecord) { i.updatedAt = this.clock(); }
   async findById(id: string) { const i = this.invoices.get(id); return i ? structuredClone(i) : null; }
   async setPdf(id: string, pdfPath: string) {
-    const i = this.invoices.get(id)!; i.pdfPath = pdfPath; if (i.status === "PENDING") i.status = "PDF_READY"; this.touch(i);
+    const i = this.invoices.get(id)!;
+    if (i.status === "PENDING") { i.pdfPath = pdfPath; i.status = "PDF_READY"; this.touch(i); }
+    else if (!i.pdfPath) { i.pdfPath = pdfPath; this.touch(i); }
   }
   async claimForSending(id: string) {
     const i = this.invoices.get(id);
@@ -79,8 +99,11 @@ export class MemoryInvoiceStore implements InvoiceStore {
   async markUncertain(id: string, error: string) {
     const i = this.invoices.get(id)!; if (i.status === "EMAIL_SENDING") { i.status = "EMAIL_UNCERTAIN"; i.lastError = error; this.touch(i); }
   }
+  async markAbandoned(id: string, error: string) {
+    const i = this.invoices.get(id)!; if (["EMAIL_SENDING", "EMAIL_FAILED"].includes(i.status)) { i.status = "EMAIL_ABANDONED"; i.lastError = error; this.touch(i); }
+  }
   async findStuck(olderThan: Date, limit: number) {
-    return [...this.invoices.values()].filter((i) => ["PENDING", "PDF_READY", "EMAIL_FAILED"].includes(i.status) && i.updatedAt < olderThan).slice(0, limit).map((i) => i.id);
+    return [...this.invoices.values()].filter((i) => ["PENDING", "PDF_READY", "EMAIL_SENDING", "EMAIL_FAILED"].includes(i.status) && i.updatedAt < olderThan).slice(0, limit).map((i) => i.id);
   }
 }
 

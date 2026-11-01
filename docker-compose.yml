@@ -38,6 +38,12 @@ services:
       NODE_ENV: production
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -51,8 +57,18 @@ services:
       MONGODB_URI: mongodb://mongo:27017/apexoutbox
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
+      # Set here (not only in the Dockerfile) because env_file would otherwise override it with the
+      # development default from .env and the PDFs would be written outside the persistent volume.
+      INVOICE_DIR: /data/invoices
     volumes:
       - invoice-files:/data/invoices
+    healthcheck:
+      # The worker has no HTTP port; it touches this file every 15 s while its loops are alive.
+      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/worker-heartbeat');process.exit(Date.now()-s.mtimeMs<60000?0:1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     depends_on:
       mongo: { condition: service_healthy }
       redis: { condition: service_healthy }

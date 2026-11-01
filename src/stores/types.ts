@@ -16,6 +16,23 @@ export interface LeadRecord {
   onboardingError: string;
 }
 
+export interface ListLeadsQuery {
+  ownerId?: string;
+  state?: LeadState;
+  followUpBefore?: Date;
+  followUpAfter?: Date;
+  limit: number;
+  /** Opaque cursor from a previous page (the id of its last item). */
+  after?: string;
+}
+
+export interface NewLead {
+  name: string;
+  company: string;
+  ownerId: string;
+  followUpDate?: Date;
+}
+
 export interface TransitionWrite {
   id: string;
   expectedVersion: number;
@@ -34,6 +51,10 @@ export interface LeadStore {
   findById(id: string): Promise<LeadRecord | null>;
   /** Returns the updated lead, or null when the version or state no longer matches. */
   applyTransition(write: TransitionWrite): Promise<LeadRecord | null>;
+  list(query: ListLeadsQuery): Promise<{ items: LeadRecord[]; nextCursor: string | null }>;
+  create(lead: NewLead): Promise<LeadRecord>;
+  /** A lead that left Closed-Won while its onboarding was still PENDING must not be onboarded any more. */
+  cancelPendingOnboarding(id: string): Promise<void>;
   findOnboardingPending(limit: number): Promise<LeadRecord[]>;
   markOnboarding(id: string, status: OnboardingStatus, error?: string): Promise<void>;
 }

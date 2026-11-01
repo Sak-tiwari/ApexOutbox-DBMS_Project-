@@ -29,6 +29,7 @@ async function startServer() {
         apiKeys: parseApiKeys(config.API_KEYS),
         log,
         metrics: new Metrics(),
+        rateLimitPerMinute: config.RATE_LIMIT_PER_MINUTE,
         checks: {
             mongo: () => mongoose.connection.readyState === 1,
             redis: async () => (await queue.connection.ping()) === "PONG",
@@ -38,7 +39,9 @@ async function startServer() {
             apexoutbox_outbox_failed: await OutboxEvent.countDocuments({ status: "FAILED" }),
             apexoutbox_invoices_email_uncertain: await Invoice.countDocuments({ status: "EMAIL_UNCERTAIN" }),
             apexoutbox_invoices_email_failed: await Invoice.countDocuments({ status: "EMAIL_FAILED" }),
-            apexoutbox_leads_onboarding_pending: await Lead.countDocuments({ onboardingStatus: "PENDING" }),
+            apexoutbox_invoices_email_abandoned: await Invoice.countDocuments({ status: "EMAIL_ABANDONED" }),
+            apexoutbox_invoices_email_sending: await Invoice.countDocuments({ status: "EMAIL_SENDING" }),
+            apexoutbox_leads_onboarding_pending: await Lead.countDocuments({ onboardingStatus: "PENDING", currentState: "Closed-Won" }),
             apexoutbox_leads_onboarding_failed: await Lead.countDocuments({ onboardingStatus: "FAILED" }),
         }),
     });

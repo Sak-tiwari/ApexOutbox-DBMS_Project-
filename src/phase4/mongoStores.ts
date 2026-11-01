@@ -22,8 +22,9 @@ export class MongoInvoiceStore implements InvoiceStore {
     return doc ? asInvoice(doc) : null;
   }
   async setPdf(id: string, pdfPath: string) {
-    await Invoice.updateOne({ _id: id }, { $set: { pdfPath } });
-    await Invoice.updateOne({ _id: id, status: "PENDING" }, { $set: { status: "PDF_READY" } });
+    // One atomic write for the normal case, so a crash can never leave "path saved, status PENDING".
+    const r = await Invoice.updateOne({ _id: id, status: "PENDING" }, { $set: { pdfPath, status: "PDF_READY" } });
+    if (r.matchedCount === 0) await Invoice.updateOne({ _id: id, pdfPath: "" }, { $set: { pdfPath } });
   }
   async claimForSending(id: string) {
     const doc = await Invoice.findOneAndUpdate(
@@ -45,8 +46,14 @@ export class MongoInvoiceStore implements InvoiceStore {
   async markUncertain(id: string, error: string) {
     await Invoice.updateOne({ _id: id, status: "EMAIL_SENDING" }, { $set: { status: "EMAIL_UNCERTAIN", lastError: error } });
   }
+  async markAbandoned(id: string, error: string) {
+    await Invoice.updateOne(
+      { _id: id, status: { $in: ["EMAIL_SENDING", "EMAIL_FAILED"] } },
+      { $set: { status: "EMAIL_ABANDONED", lastError: error } }
+    );
+  }
   async findStuck(olderThan: Date, limit: number) {
-    const docs = await Invoice.find({ status: { $in: ["PENDING", "PDF_READY", "EMAIL_FAILED"] }, updatedAt: { $lt: olderThan } })
+    const docs = await Invoice.find({ status: { $in: ["PENDING", "PDF_READY", "EMAIL_SENDING", "EMAIL_FAILED"] }, updatedAt: { $lt: olderThan } })
       .sort({ updatedAt: 1 })
       .limit(limit)
       .select("_id")

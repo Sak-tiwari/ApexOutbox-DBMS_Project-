@@ -13,11 +13,13 @@ describe("requeue sweep", () => {
     store.seed({ id: "fresh", status: "PENDING", updatedAt: minutesAgo(1) });
     store.seed({ id: "sent", status: "EMAIL_SENT", updatedAt: minutesAgo(60) });
     store.seed({ id: "uncertain", status: "EMAIL_UNCERTAIN", updatedAt: minutesAgo(60) });
-    store.seed({ id: "sending", status: "EMAIL_SENDING", updatedAt: minutesAgo(60) });
+    store.seed({ id: "sending-old", status: "EMAIL_SENDING", updatedAt: minutesAgo(60) });
+    store.seed({ id: "sending-fresh", status: "EMAIL_SENDING", updatedAt: minutesAgo(1) });
+    store.seed({ id: "abandoned", status: "EMAIL_ABANDONED", updatedAt: minutesAgo(60) });
     const seen: string[] = [];
     const tally = await requeueStuckInvoices({ store, requeue: async (id) => { seen.push(id); return "created"; }, log: silentLog });
-    expect(seen.sort()).toEqual(["old-failed", "old-pending"]);
-    expect(tally).toEqual({ created: 2, retried: 0, alreadyQueued: 0 });
+    expect(seen.sort()).toEqual(["old-failed", "old-pending", "sending-old"]);
+    expect(tally).toEqual({ created: 3, retried: 0, alreadyQueued: 0 });
   });
 
   it("counts each outcome and survives a failing requeue", async () => {

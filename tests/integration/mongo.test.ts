@@ -24,17 +24,19 @@ import { TransitionService } from "../../src/services/TransitionService";
 import { MongoLeadStore } from "../../src/stores/mongoLeadStore";
 import { connectTestDb, dropAndDisconnect, mongoEngine } from "../helpers/mongo";
 import { TestRedis } from "../helpers/redis";
+import { hasRedisServer, requireOrWarn } from "../helpers/require";
 
 const engine = await mongoEngine();
-const available = engine !== "none";
+const available = engine !== "none" && hasRedisServer;
 // FerretDB (a MongoDB-compatible emulator) does not make concurrent conditional updates atomic: with the
 // plain MongoDB driver and none of our code involved, 2 of 10 concurrent {_id, v:0} -> {$inc v} updates win.
 // Real MongoDB guarantees single-document atomicity, so the tests that PROVE our locking and claiming only
 // make sense there. They are skipped on FerretDB and must be run on real mongod (see docs/RUNBOOK.md).
 const realMongo = engine === "mongodb";
 const itAtomic = it.skipIf(!realMongo);
-if (!available) console.warn("[mongo.test] No MongoDB reachable at TEST_MONGODB_URI (default mongodb://127.0.0.1:27017): ALL tests in this file are SKIPPED.");
-else if (!realMongo) console.warn("[mongo.test] Engine is FerretDB, not real MongoDB: atomicity tests (marked itAtomic) are SKIPPED.");
+requireOrWarn("mongo.test", engine !== "none", "no MongoDB-compatible server is reachable at TEST_MONGODB_URI");
+requireOrWarn("mongo.test", hasRedisServer, "redis-server is not installed");
+requireOrWarn("mongo.test", realMongo, "the server is not real MongoDB (atomicity tests cannot run)", "REQUIRE_REAL_MONGO");
 
 const leads = new MongoLeadStore();
 const svc = new TransitionService(leads);
@@ -284,5 +286,73 @@ describe.skipIf(!available)("MongoDB integration", () => {
       expect((await request(app()).get(`/api/leads/${id}`).set(auth)).body.data.activityHistory).toHaveLength(3);
       expect((await request(app()).get("/api/leads/not-an-id").set(auth)).status).toBe(404);
     });
+  });
+});
+
+describe.skipIf(!available)("MongoDB stores: fixes from the review (work on FerretDB and real MongoDB)", () => {
+  const invoices = new MongoInvoiceStore();
+  beforeAll(async () => { await connectTestDb("apexoutbox_fixes"); await Promise.all([Lead.init(), Invoice.init()]); });
+  afterAll(async () => { await dropAndDisconnect(); });
+
+  const newInvoice = (extra: object = {}) => Invoice.create({
+    idempotencyKey: `k-${Math.random()}`, clientId: new mongoose.Types.ObjectId(), invoiceNumber: `INV-${Math.random()}`,
+    snapshot: { clientName: "A", email: "a@example.com", company: "C", amount: 1, currency: "INR", description: "d", createdAt: new Date() }, ...extra,
+  });
+
+  it("setPdf records the path and PDF_READY together; a later call does not overwrite a stored path", async () => {
+    const inv = await newInvoice();
+    await invoices.setPdf(String(inv._id), "/p/one.pdf");
+    let doc: any = await Invoice.findById(inv._id).lean();
+    expect([doc.status, doc.pdfPath]).toEqual(["PDF_READY", "/p/one.pdf"]);
+    await invoices.setPdf(String(inv._id), "/p/two.pdf");
+    doc = await Invoice.findById(inv._id).lean();
+    expect(doc.pdfPath).toBe("/p/one.pdf");
+  });
+
+  it("setPdf repairs an invoice that has a path but is still PENDING (legacy half-written state)", async () => {
+    const inv = await newInvoice({ pdfPath: "/p/old.pdf" });
+    await invoices.setPdf(String(inv._id), "/p/old.pdf");
+    const doc: any = await Invoice.findById(inv._id).lean();
+    expect(doc.status).toBe("PDF_READY");
+  });
+
+  it("findStuck includes an old EMAIL_SENDING invoice but not abandoned or sent ones", async () => {
+    const old = new Date(Date.now() - 3_600_000);
+    const mk = async (status: string) => { const i = await newInvoice({ status }); await Invoice.collection.updateOne({ _id: i._id }, { $set: { updatedAt: old } }); return String(i._id); };
+    const [sending, abandoned, sent] = [await mk("EMAIL_SENDING"), await mk("EMAIL_ABANDONED"), await mk("EMAIL_SENT")];
+    const stuck = await invoices.findStuck(new Date(Date.now() - 600_000), 100);
+    expect(stuck).toContain(sending);
+    expect(stuck).not.toContain(abandoned);
+    expect(stuck).not.toContain(sent);
+  });
+
+  it("markAbandoned works from EMAIL_SENDING and EMAIL_FAILED only", async () => {
+    const a = await newInvoice({ status: "EMAIL_SENDING" });
+    const b = await newInvoice({ status: "EMAIL_SENT" });
+    await invoices.markAbandoned(String(a._id), "550 no such user");
+    await invoices.markAbandoned(String(b._id), "x");
+    expect(((await Invoice.findById(a._id).lean()) as any).status).toBe("EMAIL_ABANDONED");
+    expect(((await Invoice.findById(b._id).lean()) as any).status).toBe("EMAIL_SENT");
+  });
+
+  it("lead list pages by id with a next cursor and filters by state", async () => {
+    await Lead.deleteMany({});
+    for (let i = 0; i < 5; i++) await Lead.create({ name: `L${i}`, company: "C", ownerId: "o", currentState: i % 2 ? "Contacted" : "New" });
+    const p1 = await leads.list({ limit: 2 });
+    const p2 = await leads.list({ limit: 2, after: p1.nextCursor! });
+    const p3 = await leads.list({ limit: 2, after: p2.nextCursor! });
+    expect([p1.items.length, p2.items.length, p3.items.length, p3.nextCursor]).toEqual([2, 2, 1, null]);
+    expect(new Set([...p1.items, ...p2.items, ...p3.items].map((l) => l.id)).size).toBe(5);
+    expect((await leads.list({ limit: 10, state: "Contacted" })).items).toHaveLength(2);
+    expect((await leads.list({ limit: 10, after: "not-an-id" })).items).toEqual([]);
+  });
+
+  it("cancelPendingOnboarding cancels only leads that are no longer Closed-Won", async () => {
+    const still = String((await Lead.create({ name: "W", company: "C", ownerId: "o", currentState: "Closed-Won", onboardingStatus: "PENDING" }))._id);
+    const left = String((await Lead.create({ name: "R", company: "C", ownerId: "o", currentState: "Negotiation", onboardingStatus: "PENDING" }))._id);
+    const done = String((await Lead.create({ name: "D", company: "C", ownerId: "o", currentState: "Negotiation", onboardingStatus: "DONE" }))._id);
+    for (const id of [still, left, done]) await leads.cancelPendingOnboarding(id);
+    const status = async (id: string) => ((await Lead.findById(id).lean()) as any).onboardingStatus;
+    expect([await status(still), await status(left), await status(done)]).toEqual(["PENDING", "CANCELLED", "DONE"]);
   });
 });

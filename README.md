@@ -96,6 +96,16 @@ npm run dev:worker          # worker (invoices, outbox dispatcher, reconciler, r
 
 All API routes now need `Authorization: Bearer <key>` (keys from `API_KEYS`).
 
+| Route | Purpose |
+|---|---|
+| `POST /api/leads` | create a lead `{name, company, followUpDate?}`; the key's user becomes the owner |
+| `GET /api/leads` | list; `state`, `ownerId`, `followUpBefore/After`, `limit` (1-100, default 25), `cursor` -> `nextCursor` |
+| `GET /api/leads/:id` | one lead with its history |
+| `POST /api/leads/:id/transition` | `{targetState, version, reason?, deal?}` (`version` may be a number or digit string) |
+| `GET /health`, `GET /ready`, `GET /metrics` | liveness, readiness (Mongo + Redis), metrics (key required) |
+
+`RATE_LIMIT_PER_MINUTE` (default 300 per client IP) limits `/api`. `npm run ci` = typecheck + full tests with skips as errors + build.
+
 ## Layout (changed from `main`)
 Phase 3 files moved into `src/models`, `src/services`, `src/routes`, `src/tests`, `src/app.ts`, `src/server.ts`
 (the folders their imports and `package.json` already expected). **Teammates: pull/rebase before editing.**

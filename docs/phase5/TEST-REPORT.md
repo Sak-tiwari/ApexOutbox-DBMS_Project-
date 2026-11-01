@@ -5,27 +5,28 @@
 | Check | Result |
 |---|---|
 | `npm run typecheck` (app + tests) | clean |
-| `npm test` (vitest) | **102 passed, 0 failed, 2 skipped** (104 tests, 11 files) |
+| `npm test` (vitest) | **121 passed, 0 failed, 2 skipped** (123 tests, 11 files) |
 | `npm run test:legacy` (the Phase 3 team's own script) | 4/4 pass, exit 0 |
 | `npm audit` (all dependencies) | 0 vulnerabilities |
 | Licence scan, 134 production packages | no GPL/AGPL/LGPL/SSPL; `THIRD_PARTY_NOTICES.md` generated |
-| Real-process smoke test (`scripts/smoke.js` against built `dist` API + worker) | **17/17 checks** |
+| Real-process smoke test (`scripts/smoke.js` against built `dist` API + worker) | **19/19 checks** |
 
 ## Test files
 
 | File | Tests | What it covers |
 |---|---|---|
 | `tests/unit/email.test.ts` | 17 | which SMTP errors are "uncertain", deterministic Message-ID, no demo mode in production |
-| `tests/unit/processor.test.ts` | 10 | send once; replay; 5 concurrent jobs; timeout -> uncertain; retry after definite failure; crash after sending; PDF failure |
+| `tests/unit/processor.test.ts` | 14 | send once; replay; 5 concurrent jobs; timeout -> uncertain; retry after definite failure; crash after sending; PDF failure; **bounce -> abandoned; attempt cap; PENDING-with-path repair** |
 | `tests/unit/dispatcher.test.ts` | 8 | publish, backoff, hung publish cut off, max attempts, stale recovery, unknown event |
 | `tests/unit/transition.test.ts` | 10 | the 4 original Phase 3 cases plus owner (403), not found (404), deal required, concurrent winner, no-op, no dead ends |
 | `tests/unit/handoff.test.ts` | 5 | Closed-Won hand-off, reconciler, give-up, invalid deal |
-| `tests/unit/requeue.test.ts` | 3 | which invoices are re-queued |
+| `tests/unit/requeue.test.ts` | 3 | which invoices are re-queued (now including stale `EMAIL_SENDING`, never abandoned/sent) |
 | `tests/unit/invoice-pdf.test.ts` | 3 | PDF finishes and is valid (regression for the hang), path safety |
 | `tests/unit/config.test.ts` | 4 | production requires keys and SMTP; weak API keys rejected |
-| `tests/http/api.test.ts` | 23 | auth (401, spoofed header ignored), every error code, Closed-Won over HTTP, no leakage in 500s, health/ready/metrics |
-| `tests/integration/queue.test.ts` | 6 | **real Redis + BullMQ**: duplicate jobs, outage and recovery, baseline hang, requeue of lost/failed jobs |
-| `tests/integration/mongo.test.ts` | 13 (+2 skipped) | **database**: unique constraints, 20 concurrent onboardings, stale-version refusal, full end-to-end with replays, reconciler, crashed dispatcher, uncertain email, HTTP on real data |
+| `tests/http/api.test.ts` | 31 | (adds: create lead, paging, numeric-string version, reopen cancels onboarding, rate limit) |
+| (original scope) | |  auth (401, spoofed header ignored), every error code, Closed-Won over HTTP, no leakage in 500s, health/ready/metrics |
+| `tests/integration/queue.test.ts` | 7 | **real Redis + BullMQ**: duplicate jobs, outage and recovery, baseline hang, requeue of lost/failed jobs |
+| `tests/integration/mongo.test.ts` | 19 (+2 skipped) | **database**: unique constraints, 20 concurrent onboardings, stale-version refusal, full end-to-end with replays, reconciler, crashed dispatcher, uncertain email, HTTP on real data |
 
 ## Plan items vs. what was tested
 
@@ -40,7 +41,7 @@
 | Scraper changes | Not possible: Phase 2 does not exist yet. |
 | Structured logs, metrics, alerts | Logs and metrics done; alert rules are suggestions in the runbook. |
 | Backup / restore test | Scripts written, **not run** (no `mongodump` here). |
-| Secrets management / access control | API keys, redaction, production config checks. No rate limiting; no secret-store integration. |
+| Secrets management / access control | API keys, redaction, production config checks. Per-process rate limiting added (`RATE_LIMIT_PER_MINUTE`); no secret-store integration. |
 | Tenant isolation | Not applicable (no tenant concept in Phase 3/4). See finding D-3. |
 | Dependency and licence scans | Done. |
 
@@ -64,3 +65,10 @@
    store-level test for it).
 3. The Docker image and compose file were not built or run here.
 4. Email "sent" in the smoke test means **demo mode**: no real mail left the machine.
+
+## Skips are errors in CI
+
+Without `redis-server`, or without a MongoDB-compatible server, the affected files are skipped with a warning.
+`REQUIRE_INTEGRATION=1` turns that into a failure; `REQUIRE_REAL_MONGO=1` also rejects FerretDB so the two atomicity tests
+cannot be skipped. `.github/workflows/ci.yml` sets both and runs against `mongo:7`. **That workflow has not run yet**: it
+will on the first push; check its result.

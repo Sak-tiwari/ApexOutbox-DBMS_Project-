@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main, Phase-5]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      # Real MongoDB: the atomicity tests (version conflicts, email claim) only mean something here.
+      mongo:
+        image: mongo:7
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_MONGODB_URI: mongodb://127.0.0.1:27017
+      REQUIRE_INTEGRATION: "1"
+      REQUIRE_REAL_MONGO: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install redis-server (integration tests start their own throwaway instance)
+        run: sudo apt-get update && sudo apt-get install -y redis-server
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Tests (skips are errors here)
+        run: npx vitest run
+      - run: npm run build
+      - name: Dependency audit (production)
+        run: npm audit --omit=dev

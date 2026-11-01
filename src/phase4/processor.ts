@@ -1,4 +1,4 @@
-import { EmailUncertainError } from "./email";
+import { EmailPermanentError, EmailUncertainError } from "./email";
 import type { InvoiceStore, Log } from "./ports";
 import type { InvoiceSnapshot } from "./types";
 
@@ -10,12 +10,15 @@ export interface ProcessorDeps {
   now?: () => Date;
   /** An EMAIL_SENDING marker older than this means the worker died mid-send. Must exceed SMTP timeouts. */
   staleSendingMs?: number;
+  /** After this many failed sends the invoice is abandoned for a human. Default 5. */
+  maxEmailAttempts?: number;
 }
 
 export type ProcessOutcome =
   | { outcome: "sent"; messageId: string; demo: boolean }
-  | { outcome: "skipped"; reason: "already-sent" | "uncertain-needs-manual-check" | "in-progress" | "lost-claim" }
-  | { outcome: "uncertain"; reason: string };
+  | { outcome: "skipped"; reason: "already-sent" | "abandoned" | "uncertain-needs-manual-check" | "in-progress" | "lost-claim" }
+  | { outcome: "uncertain"; reason: string }
+  | { outcome: "abandoned"; reason: string };
 
 export class InvoiceNotFoundError extends Error {
   constructor(id: string) {
@@ -42,6 +45,7 @@ export async function processInvoiceJob(invoiceId: string, deps: ProcessorDeps):
   if (!invoice) throw new InvoiceNotFoundError(invoiceId);
 
   if (invoice.status === "EMAIL_SENT") return { outcome: "skipped", reason: "already-sent" };
+  if (invoice.status === "EMAIL_ABANDONED") return { outcome: "skipped", reason: "abandoned" };
   if (invoice.status === "EMAIL_UNCERTAIN") return { outcome: "skipped", reason: "uncertain-needs-manual-check" };
 
   if (invoice.status === "EMAIL_SENDING") {
@@ -55,11 +59,18 @@ export async function processInvoiceJob(invoiceId: string, deps: ProcessorDeps):
     return { outcome: "uncertain", reason };
   }
 
-  let pdfPath = invoice.pdfPath;
-  if (!pdfPath) {
-    pdfPath = await generatePdf(invoice.invoiceNumber, invoice.snapshot);
-    await store.setPdf(invoiceId, pdfPath);
+  const maxAttempts = deps.maxEmailAttempts ?? 5;
+  if (invoice.status === "EMAIL_FAILED" && invoice.emailAttempts >= maxAttempts) {
+    const reason = `Gave up after ${invoice.emailAttempts} failed sends: ${invoice.lastError}`;
+    await store.markAbandoned(invoiceId, reason);
+    log.error({ invoiceId, invoiceNumber: invoice.invoiceNumber }, "ALERT invoice email abandoned after repeated failures");
+    return { outcome: "abandoned", reason };
   }
+
+  let pdfPath = invoice.pdfPath;
+  if (!pdfPath) pdfPath = await generatePdf(invoice.invoiceNumber, invoice.snapshot);
+  // Always (re)record the path: it is idempotent, and repairs an invoice left PENDING with a path.
+  if (invoice.status === "PENDING" || !invoice.pdfPath) await store.setPdf(invoiceId, pdfPath);
 
   const claimed = await store.claimForSending(invoiceId);
   if (!claimed) return { outcome: "skipped", reason: "lost-claim" };
@@ -79,6 +90,11 @@ export async function processInvoiceJob(invoiceId: string, deps: ProcessorDeps):
       await store.markUncertain(invoiceId, String(error));
       log.error({ invoiceId, invoiceNumber: claimed.invoiceNumber, error: String(error) }, "ALERT invoice email outcome uncertain; not retrying automatically");
       return { outcome: "uncertain", reason: String(error) };
+    }
+    if (error instanceof EmailPermanentError) {
+      await store.markAbandoned(invoiceId, String(error));
+      log.error({ invoiceId, invoiceNumber: claimed.invoiceNumber, error: String(error) }, "ALERT invoice email permanently rejected; not retrying");
+      return { outcome: "abandoned", reason: String(error) };
     }
     await store.markFailed(invoiceId, String(error));
     log.warn({ invoiceId, error: String(error) }, "invoice email failed; will retry");

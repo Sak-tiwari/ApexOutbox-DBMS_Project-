@@ -98,6 +98,11 @@ export class TransitionService {
         if (!updated) {
             throw new ConflictError('Concurrency Conflict: Lead state was updated by another session. Please refresh.');
         }
+        if (startState === 'Closed-Won') {
+            // Re-opened before onboarding finished: stop the reconciler from billing a deal that is no longer won.
+            await this.leads.cancelPendingOnboarding(leadId);
+            return (await this.leads.findById(leadId)) ?? updated;
+        }
         return updated;
     }
 }

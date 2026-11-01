@@ -17,7 +17,7 @@ export interface IDeal {
     description: string;
 }
 
-export type OnboardingStatus = 'PENDING' | 'DONE' | 'FAILED';
+export type OnboardingStatus = 'PENDING' | 'DONE' | 'FAILED' | 'CANCELLED';
 
 export interface ILead extends Document {
     name: string;
@@ -63,7 +63,7 @@ const LeadSchema = new Schema<ILead>({
         }, { _id: false }),
         default: undefined
     },
-    onboardingStatus: { type: String, enum: ['PENDING', 'DONE', 'FAILED'], default: undefined },
+    onboardingStatus: { type: String, enum: ['PENDING', 'DONE', 'FAILED', 'CANCELLED'], default: undefined },
     onboardingAttempts: { type: Number, default: 0 },
     onboardingError: { type: String, default: '' }
 }, {

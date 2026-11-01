@@ -23,6 +23,22 @@ Reviewed: `main` at commit `4ca5d79` (Phase 3 + Phase 4 code). "Verified" means 
 | F-14 | Medium | Concurrent client upsert can raise a duplicate-key error that was not handled. | By reading. | Caught and re-read. 20 concurrent onboardings verified to give 1 client, 1 invoice, 1 event. |
 | F-15 | Medium | No readiness probe, structured logs or metrics. | n/a | `/health`, `/ready` (checks Mongo and Redis), JSON logs with secret redaction, `/metrics` with counters and business gauges. |
 
+### A2. Second review (whole repository) and fixes
+
+| ID | Finding | Fix |
+|---|---|---|
+| R-01 | Invoices stuck in `EMAIL_SENDING` (worker killed) were never picked up by the sweep. | Sweep includes `EMAIL_SENDING`; the processor marks it uncertain once stale. |
+| R-02 | `setPdf` used two writes: a crash between them left `PENDING` with a path forever. | One atomic update; the processor also repairs this state. |
+| R-03 | A bounce (SMTP 5xx) and any other failure were retried without limit. | `EmailPermanentError` -> `EMAIL_ABANDONED` at once; 5 failed sends -> abandoned; alert log + gauge. |
+| R-04 | A COMPLETED queue job blocked re-queueing (same job id). | Requeue removes the completed job and adds a fresh one (verified on real Redis). |
+| R-05 | Compose: `.env` overrode `INVOICE_DIR`, so PDFs missed the persistent volume; no worker healthcheck. | Compose forces `/data/invoices`; heartbeat-file healthcheck for the worker, `/health` for the API. |
+| R-06 | Tests silently skipped without Redis/MongoDB. | Graceful skip with a warning; `REQUIRE_INTEGRATION` / `REQUIRE_REAL_MONGO` make skips fail; CI workflow sets both. |
+| R-07 | A lead re-opened from Closed-Won while onboarding was PENDING stayed PENDING (and inflated the gauge). | New `CANCELLED` status; gauge counts only Closed-Won leads. |
+| R-08 | `version` as a string (`"3"`) was rejected with a confusing error. | Accepts numbers and digit strings; rejects empty, fractional, negative, non-numeric. |
+| R-09 | List returned an unpaged 200 leads. | `limit` (1-100, default 25), opaque `cursor`, `state` filter, `nextCursor`. |
+| R-10 | No way to create a lead through the API. | `POST /api/leads` (owner = the API key's user). The smoke test now uses it. |
+| R-11 | No rate limiting; no CI. | Per-process limiter (`RATE_LIMIT_PER_MINUTE`); `.github/workflows/ci.yml`. |
+
 ## B. Decisions the team needs to make (I did not change these)
 
 | ID | Question | Why it matters / recommendation |
@@ -37,7 +53,7 @@ Reviewed: `main` at commit `4ca5d79` (Phase 3 + Phase 4 code). "Verified" means 
 ## C. Not done / limits
 
 - **Phase 2 (scraper) does not exist yet**, so the plan's "scraper changes" test could not be written.
-- **No rate limiting** on the API (API keys could be guessed at speed). Put a rate-limiting reverse proxy in front, or add middleware.
+- **Rate limiting is per process and per IP.** Behind several replicas or a proxy, use a gateway limiter for a hard limit and configure `trust proxy`.
 - **Money is still stored as floating point** in the invoice snapshot (now validated to 2 decimals). Integer paise would be safer.
 - **Secrets** come from environment variables only; use your platform's secret store. No key-rotation tooling.
 - Alert rules are suggestions in the runbook, not deployed.
@@ -46,6 +62,7 @@ Reviewed: `main` at commit `4ca5d79` (Phase 3 + Phase 4 code). "Verified" means 
 
 - **Real MongoDB was not available.** The tests ran against FerretDB 1.24 (a MongoDB-compatible server). With the plain driver and none of our code involved, FerretDB let 2 of 10 concurrent conditional updates succeed, so it is **not atomic under concurrency**, which real MongoDB is. Two tests that prove our locking and claiming (`10 simultaneous transitions...`, `five concurrent processors...`) are therefore skipped on FerretDB and **must be run against real MongoDB** (command in the test report); I have not seen them pass. The same logic is covered by in-memory tests that assume atomic updates.
 - **Docker image and compose file were not built or run** (no Docker daemon in my environment).
+- **The CI workflow has not run yet** (it needs the push); **the Docker healthchecks were not exercised** (no Docker here, only the heartbeat logic was run).
 - **Real SMTP delivery** was not tested (demo mode and an injected transport only).
 - **Backup and restore scripts were not run** (no `mongodump` here).
 - No load or performance testing.

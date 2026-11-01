@@ -27,7 +27,8 @@ for that key to move it. Call the API with `Authorization: Bearer <key>` (or `x-
 | `MONGODB_URI`, `REDIS_URL` | yes | validated at start-up |
 | `API_KEYS` | production | `key:user,key2:user2`; keys at least 16 characters |
 | `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM` | production | without them the app **refuses to start** in production. Outside production it uses DEMO mode (nothing is sent) |
-| `INVOICE_DIR` | recommended | persistent volume in production |
+| `INVOICE_DIR` | recommended | persistent volume in production. `docker-compose.yml` forces `/data/invoices` for the worker |
+| `RATE_LIMIT_PER_MINUTE` | no | per client IP on `/api`, default 300, `0` disables |
 | `NODE_ENV`, `PORT`, `LOG_LEVEL` | no | |
 
 ## 4. Deploy (single host)
@@ -36,14 +37,15 @@ cp .env.example .env     # real secrets; never commit
 docker compose up -d --build
 curl localhost:3000/ready
 ```
-Put TLS and **rate limiting** in front (reverse proxy); the app has neither. Use `/ready` for load-balancer checks and
+Put TLS in front (reverse proxy). The app has a per-process rate limit (`RATE_LIMIT_PER_MINUTE`, per client IP); behind several replicas use a gateway limiter for a hard global limit. Use `/ready` for load-balancer checks and
 `/health` for liveness. *(The Dockerfile and compose file were not built in my environment; the first build is part of release testing.)*
 
 ## 5. Release checklist
 ```
 npm ci
 npm run typecheck
-npm test                                  # 102 pass; 2 skipped on a non-MongoDB engine
+npm test                                  # 121 pass; 2 skipped on a non-MongoDB engine
+REQUIRE_INTEGRATION=1 REQUIRE_REAL_MONGO=1 TEST_MONGODB_URI=mongodb://127.0.0.1:27018 npx vitest run   # nothing may be skipped
 TEST_MONGODB_URI=<real mongod> npm run test:integration   # must show 0 skipped
 npm run test:legacy
 npm audit
@@ -60,10 +62,10 @@ API_URL=... API_KEY=... OWNER_ID=<user of that key> MONGODB_URI=... node scripts
 | `apexoutbox_http_requests_total{status}` | request counts by status class |
 | `apexoutbox_transitions_total{outcome}` | `OK` or the error code (`VERSION_CONFLICT`, `INVALID_TRANSITION`, ...) |
 | `apexoutbox_outbox_pending` / `_failed` | events waiting / permanently failed |
-| `apexoutbox_invoices_email_uncertain` / `_failed` | invoices needing a human / failing to send |
+| `apexoutbox_invoices_email_uncertain` / `_abandoned` / `_failed` / `_sending` | needing a human / given up (bounce or too many failures) / failing, will retry / in flight (should be near 0) |
 | `apexoutbox_leads_onboarding_pending` / `_failed` | Closed-Won leads not yet onboarded / given up on |
 
-**Suggested alerts** (not deployed): `*_failed > 0` or `*_uncertain > 0` at any time; `outbox_pending` above 20 for 10 minutes;
+**Suggested alerts** (not deployed): `*_failed > 0`, `*_uncertain > 0` or `*_abandoned > 0` at any time; `outbox_pending` above 20 for 10 minutes;
 `/ready` returning 503 for 2 minutes; 5xx rate above 1%. Worker logs contain `ALERT` lines for the same conditions.
 
 ## 7. Recovery procedures
@@ -78,13 +80,22 @@ All commands use `mongosh <MONGODB_URI>`.
 3. Delivered: `db.invoices.updateOne({invoiceNumber:"INV-..."},{$set:{status:"EMAIL_SENT"}})`
 4. Not delivered: `db.invoices.updateOne({invoiceNumber:"INV-..."},{$set:{status:"EMAIL_FAILED"}})`. The sweep re-sends it within about 10 minutes.
 
+**Invoice EMAIL_ABANDONED** (the provider rejected the address with a 5xx such as 550, or 5 sends failed): the system stops on purpose.
+Read `lastError`, correct the address in `snapshot.email` (or fix the provider problem), then
+`db.invoices.updateOne({invoiceNumber:"INV-..."},{$set:{status:"EMAIL_FAILED",emailAttempts:0}})`; the sweep re-sends it within about 10 minutes.
+
+**Lead onboarding CANCELLED:** the lead was re-opened from Closed-Won before its client/invoice was created, so nothing is billed.
+If it is won again, onboarding starts again with the new deal.
+
 **Lead onboarding FAILED** (bad deal data or repeated errors): read `onboardingError` on the lead, fix `deal`, then
 `db.leads.updateOne({_id:ObjectId("...")},{$set:{onboardingStatus:"PENDING",onboardingAttempts:0}})`.
 
 **Redis lost its data:** nothing to do. Within about 10 minutes the worker recreates jobs for unsent invoices
 (`requeue` sweep). The email step is safe to repeat (at most one send per invoice).
 
-**Worker killed mid-send:** the invoice stays `EMAIL_SENDING`; after 5 minutes it is marked `EMAIL_UNCERTAIN` (see above).
+**Worker killed mid-send:** the invoice stays `EMAIL_SENDING`; the sweep picks it up after 10 idle minutes and it is marked `EMAIL_UNCERTAIN` (see above).
+
+**Container health:** the API is checked via `/health`; the worker touches `/tmp/worker-heartbeat` every 15 s while connected to MongoDB and the container turns unhealthy if it stops.
 
 **MongoDB down:** `/ready` returns 503, requests fail with 500. No manual step after it returns; the reconciler and sweeps catch up.
 

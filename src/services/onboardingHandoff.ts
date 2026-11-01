@@ -19,7 +19,7 @@ export const MAX_ONBOARDING_ATTEMPTS = 10;
 export async function attemptOnboarding(
   lead: LeadRecord,
   deps: { leads: LeadStore; onboard: OnboardFn; log: Log },
-): Promise<"DONE" | "PENDING" | "FAILED"> {
+): Promise<"DONE" | "PENDING" | "FAILED" | "CANCELLED"> {
   const { leads, onboard, log } = deps;
   if (lead.currentState !== "Closed-Won" || !lead.deal) return lead.onboardingStatus ?? "PENDING";
   if (lead.onboardingStatus === "DONE") return "DONE";

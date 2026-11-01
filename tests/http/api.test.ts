@@ -177,3 +177,91 @@ describe("errors, health and metrics", () => {
     expect([res.status, res.body.code]).toEqual([404, "NOT_FOUND"]);
   });
 });
+
+import { rateLimit } from "../../src/middleware/rateLimit";
+
+describe("lead creation, listing and paging", () => {
+  it("creates a lead owned by the calling key, ignoring any ownerId in the body", async () => {
+    const { app } = build();
+    const res = await request(app).post("/api/leads").set(authA).send({ name: " Asha ", company: "Acme", ownerId: "someone-else" });
+    expect(res.status).toBe(201);
+    expect([res.body.data.name, res.body.data.ownerId, res.body.data.currentState, res.body.data.version]).toEqual(["Asha", "ownerA", "New", 0]);
+    expect((await request(app).post("/api/leads").set(authA).send({ name: "", company: "Acme" })).status).toBe(400);
+    expect((await request(app).post("/api/leads").send({ name: "A", company: "B" })).status).toBe(401);
+  });
+
+  it("pages with limit and an opaque cursor, and filters by state", async () => {
+    const { app, leads } = build();
+    for (const n of [2, 3, 4, 5]) leads.seed({ id: `L${n}`, ownerId: "ownerA", currentState: n % 2 ? "Contacted" : "New" });
+    const first = await request(app).get("/api/leads").query({ limit: 2 }).set(authA);
+    expect(first.body.data.map((l: any) => l.id)).toEqual(["L1", "L2"]);
+    expect(first.body.data[0].activityHistory).toBeUndefined();
+    const second = await request(app).get("/api/leads").query({ limit: 2, cursor: first.body.nextCursor }).set(authA);
+    expect(second.body.data.map((l: any) => l.id)).toEqual(["L3", "L4"]);
+    const last = await request(app).get("/api/leads").query({ limit: 2, cursor: second.body.nextCursor }).set(authA);
+    expect([last.body.data.map((l: any) => l.id), last.body.nextCursor]).toEqual([["L5"], null]);
+    const contacted = await request(app).get("/api/leads").query({ state: "Contacted" }).set(authA);
+    expect(contacted.body.data.map((l: any) => l.id)).toEqual(["L3", "L5"]);
+  });
+
+  it("rejects bad paging input (400)", async () => {
+    const { app } = build();
+    for (const q of [{ limit: 0 }, { limit: 101 }, { limit: "abc" }, { cursor: "!!!not-base64!!!" }, { state: "Nope" }]) {
+      expect((await request(app).get("/api/leads").query(q).set(authA)).status).toBe(400);
+    }
+  });
+});
+
+describe("version field", () => {
+  it("accepts a numeric string and rejects empty, fractional, negative and non-numeric values", async () => {
+    const { app, leads } = build();
+    expect((await post(app, { targetState: "Contacted", version: "0" })).status).toBe(200);
+    expect(leads.leads.get("L1")!.currentState).toBe("Contacted");
+    for (const bad of ["", "1.5", "-1", "abc", null, 1.5, -1]) {
+      expect((await post(app, { targetState: "Follow-up", version: bad })).status).toBe(400);
+    }
+  });
+});
+
+describe("re-opening a won lead before onboarding finished", () => {
+  it("cancels the pending onboarding so the reconciler never bills a lead that is no longer won", async () => {
+    const { app, leads } = build({ onboard: async () => { throw new Error("db blip"); } });
+    for (const [to, v] of [["Contacted", 0], ["Negotiation", 1]] as const) await post(app, { targetState: to, version: v });
+    const won = await post(app, { targetState: "Closed-Won", version: 2, deal });
+    expect(won.body.onboarding).toBe("PENDING");
+    const reopened = await post(app, { targetState: "Negotiation", version: 3, reason: "Client asked to renegotiate" });
+    expect(reopened.status).toBe(200);
+    expect(reopened.body.data.onboardingStatus).toBe("CANCELLED");
+    expect(await leads.findOnboardingPending(10)).toEqual([]);
+  });
+
+  it("keeps DONE when the client was already onboarded", async () => {
+    const { app } = build();
+    for (const [to, v] of [["Contacted", 0], ["Negotiation", 1]] as const) await post(app, { targetState: to, version: v });
+    await post(app, { targetState: "Closed-Won", version: 2, deal });
+    const reopened = await post(app, { targetState: "Negotiation", version: 3, reason: "Scope change after signing" });
+    expect(reopened.body.data.onboardingStatus).toBe("DONE");
+  });
+});
+
+describe("rate limiting", () => {
+  it("answers 429 with Retry-After after the limit, then recovers in the next window", async () => {
+    let t = 1_000_000;
+    const mw = rateLimit({ limit: 2, windowMs: 60_000, now: () => t });
+    const run = () => { const out: any = { headers: {} }; mw({ ip: "1.2.3.4" } as any, { setHeader: (k: string, v: string) => (out.headers[k] = v), status: (c: number) => ({ json: (b: any) => Object.assign(out, { status: c, body: b }) }) } as any, () => (out.passed = true)); return out; };
+    expect([run().passed, run().passed]).toEqual([true, true]);
+    const blocked = run();
+    expect([blocked.status, blocked.body.code, blocked.headers["Retry-After"]]).toEqual([429, "RATE_LIMITED", "60"]);
+    t += 61_000;
+    expect(run().passed).toBe(true);
+  });
+
+  it("is applied to /api by createApp but never to /health", async () => {
+    const leads = new MemoryLeadStore();
+    const app = createApp({ leads, transitions: new TransitionService(leads), onboard: async () => ({} as any), log: silentLog, metrics: new Metrics(), apiKeys: new Map([[KEY_A, "ownerA"]]), checks: { mongo: () => true, redis: () => true }, rateLimitPerMinute: 3 });
+    const codes: number[] = [];
+    for (let i = 0; i < 5; i++) codes.push((await request(app).get("/api/leads").set(authA)).status);
+    expect(codes).toEqual([200, 200, 200, 429, 429]);
+    expect((await request(app).get("/health")).status).toBe(200);
+  });
+});

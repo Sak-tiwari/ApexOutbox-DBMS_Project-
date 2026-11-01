@@ -61,7 +61,8 @@ const InvoiceSchema = new Schema(
         "EMAIL_SENDING",
         "EMAIL_SENT",
         "EMAIL_FAILED",
-        "EMAIL_UNCERTAIN"
+        "EMAIL_UNCERTAIN",
+        "EMAIL_ABANDONED"
       ],
       default: "PENDING"
     },

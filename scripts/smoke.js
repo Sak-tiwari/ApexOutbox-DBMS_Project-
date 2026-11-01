@@ -3,7 +3,7 @@
  * End-to-end smoke test against RUNNING processes (API + worker), used for release checks.
  *   API_URL=http://localhost:3000 API_KEY=... OWNER_ID=ownerA MONGODB_URI=mongodb://... node scripts/smoke.js
  * OWNER_ID must be the user id that API_KEY maps to in API_KEYS ("key:ownerA").
- * It creates one throwaway lead (Phase 3 has no create endpoint; Phase 2 ingestion will),
+ * It creates one throwaway lead through POST /api/leads,
  * moves it to Closed-Won over HTTP, waits for the invoice email, then replays and checks nothing duplicates.
  */
 const { MongoClient } = require("mongodb");
@@ -29,8 +29,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     check("API is ready (mongo + redis up)", ready.status === 200, JSON.stringify(ready.body?.checks));
     check("unauthenticated request is rejected", (await api("GET", "/api/leads/x", null, null)).status === 401);
 
-    const { insertedId } = await db.collection("leads").insertOne({ name: "Smoke Lead", company: "Smoke Co", currentState: "New", ownerId: OWNER_ID, activityHistory: [], __v: 0, createdAt: new Date(), updatedAt: new Date() });
-    const id = String(insertedId);
+    const created = await api("POST", "/api/leads", { name: "Smoke Lead", company: "Smoke Co" });
+    check("lead created through the API (owner = key's user)", created.status === 201 && created.body?.data?.ownerId === OWNER_ID, `status=${created.status}`);
+    const id = created.body?.data?.id;
+    if (!id) throw new Error("could not create the smoke lead");
+    const listed = await api("GET", "/api/leads?limit=1");
+    check("list is paged (limit honoured)", listed.status === 200 && listed.body?.data?.length === 1);
     const t = (targetState, version, extra = {}) => api("POST", `/api/leads/${id}/transition`, { targetState, version, ...extra });
 
     check("New -> Contacted", (await t("Contacted", 0)).status === 200);

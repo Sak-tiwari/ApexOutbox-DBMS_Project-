@@ -1,4 +1,5 @@
 import "dotenv/config";
+import fs from "node:fs";
 import mongoose from "mongoose";
 import IORedis from "ioredis";
 import { UnrecoverableError, Worker } from "bullmq";
@@ -92,9 +93,22 @@ async function main() {
     }
   })();
 
+  // Liveness signal for the container healthcheck: only refreshed while the loops are actually running
+  // and MongoDB is connected, so a wedged or disconnected worker becomes "unhealthy".
+  const HEARTBEAT = process.env.WORKER_HEARTBEAT_FILE || "/tmp/worker-heartbeat";
+  const beat = () => {
+    if (mongoose.connection.readyState === 1) {
+      try { fs.writeFileSync(HEARTBEAT, String(Date.now())); } catch { /* read-only fs: healthcheck will flag it */ }
+    }
+  };
+  beat();
+  const heartbeat = setInterval(beat, 15_000);
+  heartbeat.unref();
+
   const shutdown = async (signal: string) => {
     log.info({ signal }, "worker shutting down");
     stopping = true;
+    clearInterval(heartbeat);
     await worker.close();
     await Promise.race([Promise.all([dispatchLoop, reconcileLoop, requeueLoop]), sleep(5000)]);
     await queue.close();

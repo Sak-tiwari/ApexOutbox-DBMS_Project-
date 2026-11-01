@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { Lead } from "../models/Lead";
 import type { OnboardingStatus } from "../models/Lead";
-import type { LeadRecord, LeadStore, TransitionWrite } from "./types";
+import type { LeadRecord, LeadStore, ListLeadsQuery, NewLead, TransitionWrite } from "./types";
 
 function toRecord(doc: any): LeadRecord {
   return {
@@ -48,6 +48,35 @@ export class MongoLeadStore implements LeadStore {
       { new: true, lean: true },
     );
     return doc ? toRecord(doc) : null;
+  }
+
+  async list(q: ListLeadsQuery) {
+    const filter: Record<string, unknown> = {};
+    if (q.ownerId) filter.ownerId = q.ownerId;
+    if (q.state) filter.currentState = q.state;
+    if (q.followUpBefore || q.followUpAfter) {
+      filter.followUpDate = { ...(q.followUpBefore ? { $lte: q.followUpBefore } : {}), ...(q.followUpAfter ? { $gte: q.followUpAfter } : {}) };
+    }
+    if (q.after) {
+      if (!mongoose.isValidObjectId(q.after)) return { items: [], nextCursor: null };
+      filter._id = { $gt: q.after };
+    }
+    const docs = await Lead.find(filter).select("-activityHistory").sort({ _id: 1 }).limit(q.limit + 1).lean();
+    const page = docs.slice(0, q.limit).map(toRecord);
+    return { items: page, nextCursor: docs.length > q.limit ? page[page.length - 1].id : null };
+  }
+
+  async create(l: NewLead) {
+    const doc = await Lead.create({ name: l.name, company: l.company, ownerId: l.ownerId, ...(l.followUpDate ? { followUpDate: l.followUpDate } : {}) });
+    return toRecord(doc.toObject());
+  }
+
+  async cancelPendingOnboarding(id: string) {
+    if (!mongoose.isValidObjectId(id)) return;
+    await Lead.updateOne(
+      { _id: id, onboardingStatus: "PENDING", currentState: { $ne: "Closed-Won" } },
+      { $set: { onboardingStatus: "CANCELLED", onboardingError: "Lead left Closed-Won before onboarding finished" } },
+    );
   }
 
   async findOnboardingPending(limit: number): Promise<LeadRecord[]> {

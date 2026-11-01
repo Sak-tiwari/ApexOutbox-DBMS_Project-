@@ -30,6 +30,20 @@ export class EmailUncertainError extends Error {
   }
 }
 
+/** The provider definitively rejected the message (e.g. SMTP 550 mailbox does not exist). Retrying cannot help. */
+export class EmailPermanentError extends Error {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = "EmailPermanentError";
+  }
+}
+
+export function isPermanentSmtpError(error: unknown): boolean {
+  const e = error as { code?: string; responseCode?: number } | null;
+  if (e?.code === "EENVELOPE") return true;
+  return typeof e?.responseCode === "number" && e.responseCode >= 500 && e.responseCode < 600;
+}
+
 // Codes meaning "the connection broke or timed out; the server may or may not have queued the mail".
 // Conservative on purpose: ETIMEDOUT can also happen before any data was sent, but treating it as
 // uncertain only costs a manual check, while a wrong "safe to retry" can double-send an invoice.
@@ -109,6 +123,9 @@ Thank you for choosing us. Your invoice is attached.`,
   } catch (error) {
     if (isUncertainSmtpError(error)) {
       throw new EmailUncertainError(`Email outcome unknown for ${details.invoiceNumber}: ${String(error)}`, error);
+    }
+    if (isPermanentSmtpError(error)) {
+      throw new EmailPermanentError(`Email rejected for ${details.invoiceNumber}: ${String(error)}`, error);
     }
     throw error;
   }

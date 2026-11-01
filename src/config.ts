@@ -19,6 +19,8 @@ const schema = z
     SMTP_PASS: z.string().default(""),
     EMAIL_FROM: z.string().default("no-reply@example.com"),
     INVOICE_DIR: z.string().default("generated-invoices"),
+    // Requests per minute per client IP on /api (0 disables). Per process; see src/middleware/rateLimit.ts.
+    RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(0).default(300),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === "production") {

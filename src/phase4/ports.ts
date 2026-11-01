@@ -12,7 +12,7 @@ export interface InvoiceRecord {
   invoiceNumber: string;
   snapshot: { clientName: string; email: string; company: string; amount: number; currency: string; description: string; createdAt: Date };
   pdfPath: string;
-  status: "PENDING" | "PDF_READY" | "EMAIL_SENDING" | "EMAIL_SENT" | "EMAIL_FAILED" | "EMAIL_UNCERTAIN";
+  status: "PENDING" | "PDF_READY" | "EMAIL_SENDING" | "EMAIL_SENT" | "EMAIL_FAILED" | "EMAIL_UNCERTAIN" | "EMAIL_ABANDONED";
   emailAttempts: number;
   emailMessageId: string;
   lastError: string;
@@ -26,12 +26,15 @@ export interface InvoiceRecord {
  */
 export interface InvoiceStore {
   findById(id: string): Promise<InvoiceRecord | null>;
+  /** MUST be one atomic write: records the path and moves PENDING -> PDF_READY together. */
   setPdf(id: string, pdfPath: string): Promise<void>;
   claimForSending(id: string): Promise<InvoiceRecord | null>;
   markSent(id: string, messageId: string): Promise<void>;
   markFailed(id: string, error: string): Promise<void>;
   markUncertain(id: string, error: string): Promise<void>;
-  /** Ids of invoices not yet sent (PENDING / PDF_READY / EMAIL_FAILED) that have not changed since `olderThan`. */
+  /** Gives up for good (permanent rejection or too many failures). Needs a human; never retried. */
+  markAbandoned(id: string, error: string): Promise<void>;
+  /** Ids of invoices not yet finished (PENDING / PDF_READY / EMAIL_SENDING / EMAIL_FAILED) that have not changed since `olderThan`. */
   findStuck(olderThan: Date, limit: number): Promise<string[]>;
 }
 

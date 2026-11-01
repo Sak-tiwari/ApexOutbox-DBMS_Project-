@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler, type Express } from 'express';
 import { randomUUID } from 'node:crypto';
 import { AppError } from './errors';
 import { apiKeyAuth } from './middleware/auth';
+import { rateLimit } from './middleware/rateLimit';
 import { createLeadRouter, type LeadRouterDeps } from './routes/leadRoutes';
 import { createOnboardingRouter } from './phase4/api';
 import type { Log } from './phase4/ports';
@@ -15,6 +16,8 @@ export interface AppDeps extends LeadRouterDeps {
   gauges?: () => Promise<Record<string, number>>;
   log: Log;
   metrics: Metrics;
+  /** Requests per minute per client IP on /api. Omit or 0 to disable. */
+  rateLimitPerMinute?: number;
 }
 
 async function probe(fn: () => Promise<boolean> | boolean): Promise<boolean> {
@@ -67,6 +70,7 @@ export function createApp(deps: AppDeps): Express {
     res.type('text/plain').send(await deps.metrics.render(deps.gauges));
   });
 
+  app.use('/api', rateLimit({ limit: deps.rateLimitPerMinute ?? 0 }));
   app.use('/api/leads', auth, createLeadRouter(deps));
   app.use('/api/phase4', auth, createOnboardingRouter());
 
