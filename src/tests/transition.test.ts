@@ -90,11 +90,13 @@ async function runTests() {
 
   } catch (error: any) {
     console.error('❌ A test failed during pipeline validation Execution:', error.message);
+    // Phase 5: a failed test must fail the process (it used to exit 0 and always look green).
+    process.exitCode = 1;
   } finally {
     // Clean exit
     await mongoose.connection.db?.dropDatabase();
     await mongoose.disconnect();
-    process.exit(0);
+    process.exit(process.exitCode ?? 0);
   }
 }
 

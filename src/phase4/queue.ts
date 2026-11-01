@@ -1,42 +1,64 @@
-import "dotenv/config";
 import IORedis from "ioredis";
 import { Queue } from "bullmq";
 
-if (!process.env.REDIS_URL) {
-  throw new Error("REDIS_URL must be configured");
+export const QUEUE_NAME = "client-onboarding";
+
+export interface QueueClient {
+  queue: Queue;
+  connection: IORedis;
+  enqueueInvoiceJob(invoiceId: string): Promise<unknown>;
+  /** Makes sure a job exists for this invoice: creates it if missing, retries it if it failed, leaves live jobs alone. */
+  requeueInvoice(invoiceId: string): Promise<"created" | "retried" | "already-queued">;
+  close(): Promise<void>;
 }
 
-export const redisConnection = new IORedis(
-  process.env.REDIS_URL,
-  {
-    maxRetriesPerRequest: null
-  }
-);
+/**
+ * Producer-side queue client (API and dispatcher).
+ * `enableOfflineQueue: false` makes commands FAIL FAST when Redis is down instead of waiting
+ * indefinitely for it to return. The dispatcher turns that failure into a retry with backoff.
+ * (Workers use their own connection with maxRetriesPerRequest: null, as BullMQ requires.)
+ */
+export function createQueueClient(redisUrl: string): QueueClient {
+  const connection = new IORedis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableOfflineQueue: false,
+    retryStrategy: (times) => Math.min(times * 200, 2_000)
+  });
+  connection.on("error", () => {
+    /* connection errors surface through failed commands; avoid unhandled 'error' events */
+  });
 
-export const onboardingQueue = new Queue(
-  "client-onboarding",
-  {
-    connection: redisConnection,
+  const queue = new Queue(QUEUE_NAME, {
+    connection,
     defaultJobOptions: {
       attempts: 3,
-      backoff: {
-        type: "exponential",
-        delay: 2000
-      },
+      backoff: { type: "exponential", delay: 2000 },
       removeOnComplete: 100,
       removeOnFail: 500
     }
-  }
-);
+  });
+  queue.on("error", () => {});
 
-export async function enqueueInvoiceJob(
-  invoiceId: string
-) {
-  return onboardingQueue.add(
-    "process-invoice",
-    { invoiceId },
-    {
-      jobId: `invoice-${invoiceId}`
+  return {
+    queue,
+    connection,
+    // jobId makes publishing idempotent: adding the same invoice twice yields ONE job.
+    enqueueInvoiceJob: (invoiceId: string) => queue.add("process-invoice", { invoiceId }, { jobId: `invoice-${invoiceId}` }),
+    requeueInvoice: async (invoiceId: string) => {
+      const job = await queue.getJob(`invoice-${invoiceId}`);
+      if (!job) {
+        await queue.add("process-invoice", { invoiceId }, { jobId: `invoice-${invoiceId}` });
+        return "created";
+      }
+      if (await job.isFailed()) {
+        await job.retry();
+        return "retried";
+      }
+      return "already-queued";
+    },
+    close: async () => {
+      await queue.close();
+      connection.disconnect();
     }
-  );
+  };
 }

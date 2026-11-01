@@ -58,8 +58,10 @@ const InvoiceSchema = new Schema(
       enum: [
         "PENDING",
         "PDF_READY",
+        "EMAIL_SENDING",
         "EMAIL_SENT",
-        "EMAIL_FAILED"
+        "EMAIL_FAILED",
+        "EMAIL_UNCERTAIN"
       ],
       default: "PENDING"
     },
@@ -79,12 +81,12 @@ const InvoiceSchema = new Schema(
   { timestamps: true }
 );
 
-export const Client = mongoose.model(
+export const Client = mongoose.models.Client || mongoose.model(
   "Client",
   ClientSchema
 );
 
-export const Invoice = mongoose.model(
+export const Invoice = mongoose.models.Invoice || mongoose.model(
   "Invoice",
   InvoiceSchema
 );

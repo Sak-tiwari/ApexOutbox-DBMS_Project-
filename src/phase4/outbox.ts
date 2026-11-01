@@ -43,10 +43,17 @@ const OutboxSchema = new Schema(
     publishedAt: {
       type: Date,
       default: null
+    },
+    // Backoff: the dispatcher only claims events whose nextAttemptAt has passed.
+    nextAttemptAt: {
+      type: Date,
+      default: () => new Date()
     }
   },
   { timestamps: true }
 );
+
+OutboxSchema.index({ status: 1, nextAttemptAt: 1, createdAt: 1 });
 
 export const OutboxEvent =
   mongoose.models.OutboxEvent ||

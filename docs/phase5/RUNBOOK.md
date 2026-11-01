@@ -1,0 +1,102 @@
+# ApexOutbox runbook (setup, deployment, recovery)
+
+## 1. What runs
+| Process | Command | Role |
+|---|---|---|
+| API | `node dist/server.js` | REST API: leads, transitions, onboarding, `/health`, `/ready`, `/metrics` |
+| Worker | `node dist/worker.js` | invoice PDFs and email, outbox dispatcher, onboarding reconciler, stuck-invoice requeue sweep |
+| MongoDB | | source of truth (no transactions needed, so no replica set is required) |
+| Redis | | job delivery only; can be rebuilt from MongoDB |
+
+Run **one** worker process unless you have reviewed the settings: the loops are safe to run twice (all steps are idempotent) but waste work.
+
+## 2. Setup for development
+```
+npm ci
+cp .env.example .env              # set MONGODB_URI, REDIS_URL, API_KEYS
+npm run typecheck && npm test
+npm run dev          # API       (tsx watch)
+npm run dev:worker   # worker
+```
+Create an API key: `openssl rand -hex 24`, then `API_KEYS=<key>:<userId>`. The `userId` must equal a lead's `ownerId`
+for that key to move it. Call the API with `Authorization: Bearer <key>` (or `x-api-key`).
+
+## 3. Configuration
+| Variable | Required | Notes |
+|---|---|---|
+| `MONGODB_URI`, `REDIS_URL` | yes | validated at start-up |
+| `API_KEYS` | production | `key:user,key2:user2`; keys at least 16 characters |
+| `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM` | production | without them the app **refuses to start** in production. Outside production it uses DEMO mode (nothing is sent) |
+| `INVOICE_DIR` | recommended | persistent volume in production |
+| `NODE_ENV`, `PORT`, `LOG_LEVEL` | no | |
+
+## 4. Deploy (single host)
+```
+cp .env.example .env     # real secrets; never commit
+docker compose up -d --build
+curl localhost:3000/ready
+```
+Put TLS and **rate limiting** in front (reverse proxy); the app has neither. Use `/ready` for load-balancer checks and
+`/health` for liveness. *(The Dockerfile and compose file were not built in my environment; the first build is part of release testing.)*
+
+## 5. Release checklist
+```
+npm ci
+npm run typecheck
+npm test                                  # 102 pass; 2 skipped on a non-MongoDB engine
+TEST_MONGODB_URI=<real mongod> npm run test:integration   # must show 0 skipped
+npm run test:legacy
+npm audit
+npm run notices                           # regenerate THIRD_PARTY_NOTICES.md; fails on copyleft
+npm run build
+# start API + worker against a staging stack, then:
+API_URL=... API_KEY=... OWNER_ID=<user of that key> MONGODB_URI=... node scripts/smoke.js
+```
+
+## 6. Monitoring
+`GET /metrics` (requires an API key) exposes:
+| Metric | Meaning |
+|---|---|
+| `apexoutbox_http_requests_total{status}` | request counts by status class |
+| `apexoutbox_transitions_total{outcome}` | `OK` or the error code (`VERSION_CONFLICT`, `INVALID_TRANSITION`, ...) |
+| `apexoutbox_outbox_pending` / `_failed` | events waiting / permanently failed |
+| `apexoutbox_invoices_email_uncertain` / `_failed` | invoices needing a human / failing to send |
+| `apexoutbox_leads_onboarding_pending` / `_failed` | Closed-Won leads not yet onboarded / given up on |
+
+**Suggested alerts** (not deployed): `*_failed > 0` or `*_uncertain > 0` at any time; `outbox_pending` above 20 for 10 minutes;
+`/ready` returning 503 for 2 minutes; 5xx rate above 1%. Worker logs contain `ALERT` lines for the same conditions.
+
+## 7. Recovery procedures
+All commands use `mongosh <MONGODB_URI>`.
+
+**Outbox events FAILED** (queue was down longer than the retry window):
+`db.outboxevents.updateMany({status:"FAILED"},{$set:{status:"PENDING",attempts:0,nextAttemptAt:new Date()}})`
+
+**Invoice EMAIL_UNCERTAIN** (timeout or crash while sending; never auto-retried because it may have been delivered):
+1. Find it: `db.invoices.find({status:"EMAIL_UNCERTAIN"},{invoiceNumber:1,"snapshot.email":1,lastError:1})`
+2. Ask your email provider whether Message-ID `<INV-...@your-domain>` (the invoice number) was accepted.
+3. Delivered: `db.invoices.updateOne({invoiceNumber:"INV-..."},{$set:{status:"EMAIL_SENT"}})`
+4. Not delivered: `db.invoices.updateOne({invoiceNumber:"INV-..."},{$set:{status:"EMAIL_FAILED"}})`. The sweep re-sends it within about 10 minutes.
+
+**Lead onboarding FAILED** (bad deal data or repeated errors): read `onboardingError` on the lead, fix `deal`, then
+`db.leads.updateOne({_id:ObjectId("...")},{$set:{onboardingStatus:"PENDING",onboardingAttempts:0}})`.
+
+**Redis lost its data:** nothing to do. Within about 10 minutes the worker recreates jobs for unsent invoices
+(`requeue` sweep). The email step is safe to repeat (at most one send per invoice).
+
+**Worker killed mid-send:** the invoice stays `EMAIL_SENDING`; after 5 minutes it is marked `EMAIL_UNCERTAIN` (see above).
+
+**MongoDB down:** `/ready` returns 503, requests fail with 500. No manual step after it returns; the reconciler and sweeps catch up.
+
+**Restore from backup** (stop api and worker first):
+```
+MONGODB_URI=... BACKUP_DIR=/backups ./scripts/backup.sh              # take a backup (schedule daily)
+MONGODB_URI=... ./scripts/restore.sh backups/mongo-<stamp>.archive.gz backups/invoices-<stamp>.tar.gz
+```
+Then start the worker: in-flight onboarding and invoices are finished by the reconciler and sweep.
+*(These scripts were not run in my environment: test a restore on a staging copy before relying on them.)*
+
+## 8. Security notes
+- Keys live only in environment variables; rotate by changing `API_KEYS` and restarting. Logs redact authorization headers and SMTP passwords.
+- Anyone with a key can read all leads; only the lead owner can move one (decision D-5).
+- Consider disabling `POST /api/phase4/onboard` in production (decision D-4).

@@ -71,3 +71,41 @@ Before production use, implement and test:
 - Durable PDF storage
 - Integration, retry, and duplicate-processing tests
 
+---
+
+# Phase 5 - QA, hardening and release candidate (`1.0.0-rc.1`)
+
+Phase 3 (lead pipeline) and Phase 4 (onboarding, invoice, email) are now one application, with tests and an ops runbook.
+
+## Quick start
+```
+npm ci
+cp .env.example .env        # set MONGODB_URI, REDIS_URL, API_KEYS
+npm run typecheck && npm test
+npm run dev                 # API
+npm run dev:worker          # worker (invoices, outbox dispatcher, reconciler, requeue sweep)
+```
+
+## How the phases connect
+1. `POST /api/leads/:id/transition` with `targetState: "Closed-Won"` **requires a `deal`**
+   (`email`, `amount`, `currency`, `description`). It is saved in the same single-document update as the state change.
+2. The hand-off creates one client and one invoice (idempotent per lead) and writes an outbox event.
+   If that fails the lead stays `onboardingStatus: PENDING` and the worker's reconciler retries.
+3. The dispatcher publishes the event to BullMQ (jobId per invoice), the worker builds the PDF and sends the email
+   **at most once**. A timeout becomes `EMAIL_UNCERTAIN` and waits for a human (see the runbook).
+
+All API routes now need `Authorization: Bearer <key>` (keys from `API_KEYS`).
+
+## Layout (changed from `main`)
+Phase 3 files moved into `src/models`, `src/services`, `src/routes`, `src/tests`, `src/app.ts`, `src/server.ts`
+(the folders their imports and `package.json` already expected). **Teammates: pull/rebase before editing.**
+
+Phase 4 modules changed shape (same behaviour, now testable): `api.ts` exports a router instead of its own server, `queue.ts` is a
+factory (`createQueueClient`), and `worker.ts` / `dispatcher.ts` are thin runners over `processor.ts` and `dispatcherCore.ts`.
+New combined entry points: `src/server.ts` (API) and `src/worker.ts` (everything background).
+
+## Docs
+- `docs/phase5/PHASE5-FINDINGS.md` - defects found and fixed, decisions still open, what could not be verified
+- `docs/phase5/TEST-REPORT.md` - what ran, results, honest limits
+- `docs/phase5/RUNBOOK.md` - setup, deployment, monitoring, recovery steps, backup/restore
+- `THIRD_PARTY_NOTICES.md` - licences of production dependencies (`npm run notices`)

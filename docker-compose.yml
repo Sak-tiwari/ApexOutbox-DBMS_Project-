@@ -1,0 +1,63 @@
+# Local / single-host deployment: MongoDB, Redis, API and worker.
+#   cp .env.example .env   (set real secrets!)   then:   docker compose up -d --build
+# MongoDB does not need to be a replica set: no code path uses multi-document transactions
+# (every critical step is a single-document atomic update or a unique-index insert).
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # AOF persistence: queue jobs survive a Redis restart. If it is ever lost anyway, the worker's
+    # requeue sweep recreates jobs for unsent invoices (see docs/phase5/RUNBOOK.md).
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/apexoutbox
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    env_file: .env
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/apexoutbox
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    volumes:
+      - invoice-files:/data/invoices
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+volumes:
+  mongo-data:
+  redis-data:
+  invoice-files:
