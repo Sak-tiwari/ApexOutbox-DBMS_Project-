@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { Lead } from '../models/Lead';
-import { TransitionService } from '../services/TransitionService';
+import { Lead } from '../model/Lead';
+import { TransitionService } from '../Service/TransitionService';
 
 const router = Router();
 
 // Simple mock authentication middleware to identify who is making the request
 const fakeAuth = (req: Request, res: Response, next: any) => {
-  req.headers['x-user-id'] = req.headers['x-user-id'] || 'sales_user_1'; 
+  req.headers['x-user-id'] = req.headers['x-user-id'] || 'sales_user_1';
   next();
 };
 
@@ -20,7 +20,7 @@ router.get('/', fakeAuth, async (req: Request, res: Response): Promise<any> => {
     const filterQuery: any = {};
 
     if (ownerId) filterQuery.ownerId = ownerId as string;
-    
+
     if (followUpBefore || followUpAfter) {
       filterQuery.followUpDate = {};
       if (followUpBefore) filterQuery.followUpDate.$lte = new Date(followUpBefore as string);
@@ -62,6 +62,7 @@ router.post('/:id/transition', fakeAuth, async (req: Request, res: Response): Pr
       return res.status(400).json({ success: false, error: 'Missing required targetState or version details' });
     }
 
+    // Called directly on the class name since it is a static method
     const updatedLead = await TransitionService.transitionLead(
       leadId,
       targetState,
@@ -74,7 +75,7 @@ router.post('/:id/transition', fakeAuth, async (req: Request, res: Response): Pr
   } catch (error: any) {
     const isConflict = error.message.includes('Concurrency Conflict');
     const isInvalid = error.message.includes('Invalid Pipeline Transition') || error.message.includes('Reopening Guard');
-    
+
     const statusCode = isConflict ? 409 : (isInvalid ? 422 : 400);
     return res.status(statusCode).json({ success: false, error: error.message });
   }
