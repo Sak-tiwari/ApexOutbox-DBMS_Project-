@@ -8,6 +8,8 @@ import type { Log } from "./logger.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createAuthRouter } from "./routes/auth.js";
 import { createMeRouter } from "./routes/me.js";
+import { createScrapeRouter } from "./routes/scrape.js";
+import { ScrapeService } from "./scraper/service.js";
 import { createLeadsRouter } from "./routes/leads.js";
 import { createUsersRouter } from "./routes/users.js";
 import { LeadsService } from "./leads/service.js";
@@ -19,6 +21,8 @@ export interface AppDeps {
   config: Config;
   /** Test hook: clock for the rate limiters. */
   now?: () => number;
+  /** Called when a scrape job is queued, so the worker can start without waiting for its next poll. */
+  onJobQueued?: () => void;
 }
 
 async function withDeadline(work: Promise<boolean>, ms: number): Promise<boolean> {
@@ -61,6 +65,8 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/users", createUsersRouter({ service: new UsersService(db, authService), auth }));
 
   app.use("/api/leads", createLeadsRouter({ service: new LeadsService(db), auth }));
+
+  app.use("/api/scrape", createScrapeRouter({ service: new ScrapeService(db), auth, onJobQueued: deps.onJobQueued, now: deps.now }));
 
   app.use((_req, res) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } });

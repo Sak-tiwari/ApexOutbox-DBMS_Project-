@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { parseConfig } from "./config.js";
 import { assertRlsEffective, createPool } from "./db/pool.js";
 import { createLogger } from "./logger.js";
+import { ScrapeWorker } from "./scraper/worker.js";
 
 async function main() {
   const config = parseConfig();
@@ -12,13 +13,16 @@ async function main() {
   // Refuse to run with a role that would silently disable Row-Level Security.
   await assertRlsEffective(db);
 
-  const app = createApp({ db, log, config });
+  // The scraper runs in-process; it can be split into its own process later because it only talks to Postgres.
+  const worker = new ScrapeWorker({ db, log });
+  const app = createApp({ db, log, config, onJobQueued: () => worker.poke() });
+  worker.start();
   const server = app.listen(config.PORT, () => log.info({ port: config.PORT }, "API listening"));
 
   const shutdown = (signal: string) => {
     log.info({ signal }, "shutting down");
     server.close(() => {
-      db.end().finally(() => process.exit(0));
+      worker.stop().then(() => db.end()).finally(() => process.exit(0));
     });
     setTimeout(() => process.exit(1), 10_000).unref();
   };
