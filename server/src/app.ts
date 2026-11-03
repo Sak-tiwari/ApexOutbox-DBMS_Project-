@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { AuthService } from "./auth/service.js";
 import type { Config } from "./config.js";
 import { pingDb, type Db } from "./db/pool.js";
+import compression from "compression";
 import path from "node:path";
 import { createAccountRouter } from "./routes/account.js";
 import { corsAllowlist, securityHeaders } from "./http/security.js";
@@ -100,6 +101,8 @@ export function createApp(deps: AppDeps): Express {
 
   if (config.WEB_DIST_DIR) {
     const dir = path.resolve(config.WEB_DIST_DIR);
+    // gzip only the static app, never API responses (BREACH: secrets such as tokens must not be compressed next to reflected input).
+    app.use((req, res, next) => (req.path.startsWith("/api/") ? next() : compression()(req, res, next)));
     app.use(express.static(dir, { index: false, maxAge: "1y", immutable: true, setHeaders: (res, file) => { if (/(index\.html|sw\.js|registerSW\.js|manifest\.webmanifest|theme\.js)$/.test(file)) res.setHeader("Cache-Control", "no-cache"); } }));
     // Single-page app: any other GET that is not the API serves the shell.
     app.get(/^\/(?!api\/).*/, (_req, res) => { res.setHeader("Cache-Control", "no-cache"); res.sendFile(path.join(dir, "index.html")); });

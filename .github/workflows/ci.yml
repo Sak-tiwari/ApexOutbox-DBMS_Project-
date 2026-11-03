@@ -2,36 +2,45 @@ name: CI
 
 on:
   push:
-    branches: [main, Phase-5]
+    branches: [main, web-app]
   pull_request:
 
 jobs:
   test:
     runs-on: ubuntu-latest
     services:
-      # Real MongoDB: the atomicity tests (version conflicts, email claim) only mean something here.
-      mongo:
-        image: mongo:7
-        ports: ["27017:27017"]
+      # Real PostgreSQL: tenant isolation (RLS), SKIP LOCKED queues and LISTEN/NOTIFY only mean something against the real thing.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
-          --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      TEST_MONGODB_URI: mongodb://127.0.0.1:27017
-      REQUIRE_INTEGRATION: "1"
-      REQUIRE_REAL_MONGO: "1"
+      ADMIN_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      APEX_OWNER_PASSWORD: ci-owner-password
+      APEX_APP_PASSWORD: ci-app-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-      - name: Install redis-server (integration tests start their own throwaway instance)
-        run: sudo apt-get update && sudo apt-get install -y redis-server
       - run: npm ci
+      - name: Create roles and test database
+        run: DB_NAME=apexoutbox_test bash scripts/db-setup.sh
+      - name: Write server/.env.test
+        run: |
+          cat > server/.env.test <<EOT
+          TEST_DATABASE_URL=postgres://apex_app:ci-app-password@127.0.0.1:5432/apexoutbox_test
+          TEST_MIGRATION_DATABASE_URL=postgres://apex_owner:ci-owner-password@127.0.0.1:5432/apexoutbox_test
+          EOT
       - run: npm run typecheck
-      - name: Tests (skips are errors here)
-        run: npx vitest run
+      - name: Server tests (against real PostgreSQL)
+        run: npm test -w server
+      - name: Web tests
+        run: npm test -w web
       - run: npm run build
-      - name: Dependency audit (production)
+      - name: Dependency audit (what ships to production)
         run: npm audit --omit=dev

@@ -1,121 +1,83 @@
-# ApexOutbox-DBMS_Project-
-An automated business platform powered by Crawlee, Node.js, and TypeScript for web scraping. It features a custom sales pipeline state machine and a Redis/BullMQ outbox engine to automate lead ingestion, client onboarding, PDF invoicing, and email delivery.
+# ApexOutbox
 
+A multi-tenant lead-scraping and client-management platform. Find leads, work them through a sales pipeline, and when one is **Closed-Won** the system creates the client, issues a numbered invoice (PDF) and e-mails it, all in one atomic step.
 
+- **Frontend:** React 19, Vite, Tailwind, TanStack Query. Installable PWA, mobile-first (designed at 360 px), dark mode, live updates.
+- **Backend:** Node 22, Express 5, PostgreSQL 16, Zod. JWT access token plus rotating httpOnly refresh cookie.
+- **Isolation:** every row carries a `tenant_id`, enforced three ways: query filters, composite foreign keys, and PostgreSQL Row-Level Security.
 
+Design decisions and their reasons are in [`docs/webapp/DECISIONS.md`](docs/webapp/DECISIONS.md); the schema is in [`docs/webapp/SCHEMA.md`](docs/webapp/SCHEMA.md). The earlier MongoDB/BullMQ implementation is kept for reference in `legacy/mongo/`.
 
-# Business Automation System — Phase 4
+## Features
 
-## Overview
-Phase 4 automates client onboarding, invoice creation,
-PDF generation, and transactional email processing.
+| Area | What it does |
+| --- | --- |
+| Leads | Debounced server-side search and filters, keyset pagination with infinite scroll, list and board views, optimistic moves with rollback, CSV import (formula-injection safe), notes, activity history |
+| Pipeline | State machine `NEW → CONTACTED → FOLLOW_UP → NEGOTIATION → CLOSED_WON / CLOSED_LOST`; Closed-Won is final, Closed-Lost can reopen to Follow-up with a reason; optimistic concurrency (`version`) |
+| Scraper | Per-workspace domain allowlist, SSRF guard, robots.txt (RFC 9309), per-host throttling, live job progress, cancel/resume |
+| Billing | Closed-Won creates client + gapless-numbered invoice + immutable snapshot + PDF + e-mail in one transaction. Money is integer minor units |
+| E-mail | Postgres outbox, at-most-once sending, retries with backoff, an explicit "uncertain" state for unknown outcomes that a human resolves |
+| Real time | Server-Sent Events fed by PostgreSQL `LISTEN/NOTIFY`: new leads, pipeline moves, invoice and e-mail status, scrape progress |
+| Admin | Roles Owner/Admin/Member, user management, audit log, CSV export, optional TOTP 2FA, account and workspace deletion |
 
-## Technologies
-- Node.js and TypeScript
-- Express.js for the API
-- MongoDB and Mongoose
-- Redis and BullMQ for background jobs
-- PDFKit for invoice PDF generation
-- Nodemailer for email delivery
-- Zod for input validation
+## Quick start (development)
 
-## Main Components
-- `src/phase4/api.ts` — onboarding API endpoint
-- `src/phase4/onboarding.ts` — input validation and idempotency key
-- `src/phase4/models.ts` — client and invoice database models
-- `src/phase4/invoice.ts` — invoice PDF generation
-- `src/phase4/email.ts` — email delivery and demo mode
-- `src/phase4/queue.ts` — background job queue
-- `src/phase4/outbox.ts` — durable outbox event model
-- `src/phase4/dispatcher.ts` — dispatches outbox events to BullMQ
-- `src/phase4/worker.ts` — processes invoice jobs
-- `src/phase4/types.ts` — shared TypeScript interfaces
+Requirements: Node 22+, PostgreSQL 16+ (with `psql`).
 
-## Workflow
-1. A lead is marked Closed-Won in the sales pipeline.
-2. The onboarding API validates client information.
-3. Client and invoice records are created or retrieved.
-4. An outbox event is recorded for processing.
-5. The dispatcher publishes the event to BullMQ.
-6. The worker generates the invoice PDF.
-7. The worker attempts to email the invoice.
-
-## Environment Configuration
-Copy `.env.example` to `.env` in the local development
-environment and configure MongoDB, Redis, and optional
-SMTP credentials. Never commit real secrets.
-
-## Development Commands
-Install dependencies with `npm install`.
-
-Build TypeScript with `npm run build`.
-
-Start the API with `npm run start:api`.
-
-Start the dispatcher with `npm run start:dispatcher`.
-
-Start the worker with `npm run start:worker`.
-
-MongoDB and Redis must be available before starting
-the application.
-
-## Important Limitations
-This is a development prototype and requires integration
-with the shared Phase 1–3 application.
-
-Before production use, implement and test:
-- Atomic invoice and outbox transactions
-- Outbox recovery after worker crashes
-- Authentication and authorization
-- Reliable email timeout reconciliation
-- Durable PDF storage
-- Integration, retry, and duplicate-processing tests
-
----
-
-# Phase 5 - QA, hardening and release candidate (`1.0.0-rc.1`)
-
-Phase 3 (lead pipeline) and Phase 4 (onboarding, invoice, email) are now one application, with tests and an ops runbook.
-
-## Quick start
-```
+```bash
 npm ci
-cp .env.example .env        # set MONGODB_URI, REDIS_URL, API_KEYS
-npm run typecheck && npm test
-npm run dev                 # API
-npm run dev:worker          # worker (invoices, outbox dispatcher, reconciler, requeue sweep)
+cp .env.example server/.env          # then fill in the two secrets and the DB passwords
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"   # JWT_ACCESS_SECRET
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"      # TOTP_ENC_KEY
+
+ADMIN_DATABASE_URL=postgres://postgres:...@localhost:5432/postgres \
+APEX_OWNER_PASSWORD=... APEX_APP_PASSWORD=... npm run db:setup    # roles + database, once
+npm run db:migrate
+
+npm run dev:server     # API on :3000
+npm run dev:web        # app on http://localhost:5173 (proxies /api to :3000)
 ```
 
-## How the phases connect
-1. `POST /api/leads/:id/transition` with `targetState: "Closed-Won"` **requires a `deal`**
-   (`email`, `amount`, `currency`, `description`). It is saved in the same single-document update as the state change.
-2. The hand-off creates one client and one invoice (idempotent per lead) and writes an outbox event.
-   If that fails the lead stays `onboardingStatus: PENDING` and the worker's reconciler retries.
-3. The dispatcher publishes the event to BullMQ (jobId per invoice), the worker builds the PDF and sends the email
-   **at most once**. A timeout becomes `EMAIL_UNCERTAIN` and waits for a human (see the runbook).
+Open http://localhost:5173 and create a workspace. In development e-mails are only logged (`EMAIL_MODE=log`).
 
-All API routes now need `Authorization: Bearer <key>` (keys from `API_KEYS`).
+## Tests
 
-| Route | Purpose |
-|---|---|
-| `POST /api/leads` | create a lead `{name, company, followUpDate?}`; the key's user becomes the owner |
-| `GET /api/leads` | list; `state`, `ownerId`, `followUpBefore/After`, `limit` (1-100, default 25), `cursor` -> `nextCursor` |
-| `GET /api/leads/:id` | one lead with its history |
-| `POST /api/leads/:id/transition` | `{targetState, version, reason?, deal?}` (`version` may be a number or digit string) |
-| `GET /health`, `GET /ready`, `GET /metrics` | liveness, readiness (Mongo + Redis), metrics (key required) |
+```bash
+# one-time: a database whose name contains "test" (it is wiped on every run)
+DB_NAME=apexoutbox_test ADMIN_DATABASE_URL=... APEX_OWNER_PASSWORD=... APEX_APP_PASSWORD=... bash scripts/db-setup.sh
+# put TEST_DATABASE_URL and TEST_MIGRATION_DATABASE_URL in server/.env.test (see .env.example)
 
-`RATE_LIMIT_PER_MINUTE` (default 300 per client IP) limits `/api`. `npm run ci` = typecheck + full tests with skips as errors + build.
+npm test            # server (real PostgreSQL, no mocks) then web
+npm run typecheck
+npm run audit       # production dependencies
+```
 
-## Layout (changed from `main`)
-Phase 3 files moved into `src/models`, `src/services`, `src/routes`, `src/tests`, `src/app.ts`, `src/server.ts`
-(the folders their imports and `package.json` already expected). **Teammates: pull/rebase before editing.**
+The server suite includes a cross-tenant sweep: a second tenant's OWNER tries every id-addressed route against the first tenant's records and must get an identical 404, and every list, stat and export must come back free of the other tenant's rows.
 
-Phase 4 modules changed shape (same behaviour, now testable): `api.ts` exports a router instead of its own server, `queue.ts` is a
-factory (`createQueueClient`), and `worker.ts` / `dispatcher.ts` are thin runners over `processor.ts` and `dispatcherCore.ts`.
-New combined entry points: `src/server.ts` (API) and `src/worker.ts` (everything background).
+## Production
 
-## Docs
-- `docs/phase5/PHASE5-FINDINGS.md` - defects found and fixed, decisions still open, what could not be verified
-- `docs/phase5/TEST-REPORT.md` - what ran, results, honest limits
-- `docs/phase5/RUNBOOK.md` - setup, deployment, monitoring, recovery steps, backup/restore
-- `THIRD_PARTY_NOTICES.md` - licences of production dependencies (`npm run notices`)
+Terminate TLS in a reverse proxy and set `TRUST_PROXY` to the number of proxies in front. The API can also serve the built web app (`WEB_DIST_DIR`), which is what the Docker image does.
+
+```bash
+cp .env.example .env   # set secrets, ALLOWED_ORIGINS=https://your.domain, SMTP_*, EMAIL_MODE=smtp
+export POSTGRES_ADMIN_PASSWORD=... APEX_OWNER_PASSWORD=... APEX_APP_PASSWORD=...
+docker compose up -d db
+docker compose run --rm migrate
+docker compose up -d api
+```
+
+Production refuses to start with `EMAIL_MODE=log`, a non-https origin, an insecure cookie setting, or a database role that can bypass Row-Level Security. Back up the database **and** the invoice PDF volume together.
+
+> The Docker files have been reviewed and `docker compose config` validates, but the image has not been built in the environment this was developed in (no Docker daemon). The compiled server and web build were run directly with `WEB_DIST_DIR` instead.
+
+## Security summary
+
+Argon2id passwords with a strength policy; rotating single-use refresh tokens with reuse detection and revocation; optional TOTP 2FA (secrets encrypted at rest) with recovery codes; account lockout and rate limits; server-side RBAC on every route (the UI only hides things); CSRF defence on cookie endpoints; strict CORS allowlist; Helmet with CSP and HSTS; parameterised SQL only; Zod validation on every input; CSV import and export neutralise spreadsheet formulas; scraper SSRF protection and robots.txt; append-only audit log; soft deletes; secrets only from environment variables and never logged.
+
+## Known limits
+
+- Rate limiters are in memory per process; with several API replicas put a gateway limiter in front.
+- The scraper reads static HTML only (no JavaScript rendering).
+- Invoice PDFs use a standard Latin-1 font; other scripts print as `?`.
+- Deleted workspaces and users are soft-deleted (access ends immediately). Purging the rows after a retention period is an operational step that is not automated.
+- A reload restores the session from the refresh cookie; offline, the app shell loads but data views show an error with retry (API responses are never cached).

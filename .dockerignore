@@ -1,8 +1,11 @@
 node_modules
-dist
+**/node_modules
+**/dist
 .git
 .env
-tests
-docs
-generated-invoices
-*.log
+.env.*
+!.env.example
+legacy
+storage
+**/storage
+**/*.png

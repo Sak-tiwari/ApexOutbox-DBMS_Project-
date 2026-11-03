@@ -1,79 +1,49 @@
-# Local / single-host deployment: MongoDB, Redis, API and worker.
-#   cp .env.example .env   (set real secrets!)   then:   docker compose up -d --build
-# MongoDB does not need to be a replica set: no code path uses multi-document transactions
-# (every critical step is a single-document atomic update or a unique-index insert).
+# Single-host deployment: PostgreSQL + API (serving the web app). Put a TLS-terminating reverse proxy in front.
+#   cp .env.example .env     (set real secrets and ALLOWED_ORIGINS=https://your.domain)
+#   docker compose up -d db
+#   docker compose run --rm migrate
+#   docker compose up -d api
 services:
-  mongo:
-    image: mongo:7
+  db:
+    image: postgres:16-alpine
     restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set POSTGRES_ADMIN_PASSWORD}
+      APEX_OWNER_PASSWORD: ${APEX_OWNER_PASSWORD:?set APEX_OWNER_PASSWORD}
+      APEX_APP_PASSWORD: ${APEX_APP_PASSWORD:?set APEX_APP_PASSWORD}
     volumes:
-      - mongo-data:/data/db
+      - pg-data:/var/lib/postgresql/data
+      - ./scripts/db-setup.sh:/scripts/db-setup.sh:ro
+      - ./scripts/docker-db-init.sh:/docker-entrypoint-initdb.d/10-apex-roles.sh:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    # AOF persistence: queue jobs survive a Redis restart. If it is ever lost anyway, the worker's
-    # requeue sweep recreates jobs for unsent invoices (see docs/phase5/RUNBOOK.md).
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+  migrate:
+    build: .
+    profiles: ["tools"]
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      MIGRATION_DATABASE_URL: postgres://apex_owner:${APEX_OWNER_PASSWORD}@db:5432/apexoutbox
+    command: ["node", "server/dist/db/migrate-cli.js"]
 
   api:
     build: .
     restart: unless-stopped
-    env_file: .env
-    environment:
-      MONGODB_URI: mongodb://mongo:27017/apexoutbox
-      REDIS_URL: redis://redis:6379
-      NODE_ENV: production
-    ports:
-      - "3000:3000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
     depends_on:
-      mongo: { condition: service_healthy }
-      redis: { condition: service_healthy }
-
-  worker:
-    build: .
-    restart: unless-stopped
-    command: ["node", "dist/worker.js"]
+      db: { condition: service_healthy }
     env_file: .env
     environment:
-      MONGODB_URI: mongodb://mongo:27017/apexoutbox
-      REDIS_URL: redis://redis:6379
       NODE_ENV: production
-      # Set here (not only in the Dockerfile) because env_file would otherwise override it with the
-      # development default from .env and the PDFs would be written outside the persistent volume.
-      INVOICE_DIR: /data/invoices
+      DATABASE_URL: postgres://apex_app:${APEX_APP_PASSWORD}@db:5432/apexoutbox
     volumes:
-      - invoice-files:/data/invoices
-    healthcheck:
-      # The worker has no HTTP port; it touches this file every 15 s while its loops are alive.
-      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/worker-heartbeat');process.exit(Date.now()-s.mtimeMs<60000?0:1)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    depends_on:
-      mongo: { condition: service_healthy }
-      redis: { condition: service_healthy }
+      - invoices:/data/invoices
+    ports:
+      - "127.0.0.1:3000:3000"   # expose only to the reverse proxy on the same host
 
 volumes:
-  mongo-data:
-  redis-data:
-  invoice-files:
+  pg-data:
+  invoices:
