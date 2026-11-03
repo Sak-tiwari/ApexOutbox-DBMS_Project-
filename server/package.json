@@ -15,8 +15,11 @@
     "db:migrate": "tsx src/db/migrate-cli.ts"
   },
   "dependencies": {
+    "argon2": "^0.45.2",
+    "cookie": "^2.0.1",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "jose": "^6.2.15",
     "pg": "^8.13.0",
     "pino": "^10.4.0",
     "zod": "^4.1.0"

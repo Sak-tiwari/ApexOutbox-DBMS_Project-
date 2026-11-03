@@ -12,7 +12,7 @@ async function main() {
   // Refuse to run with a role that would silently disable Row-Level Security.
   await assertRlsEffective(db);
 
-  const app = createApp({ db, log });
+  const app = createApp({ db, log, config });
   const server = app.listen(config.PORT, () => log.info({ port: config.PORT }, "API listening"));
 
   const shutdown = (signal: string) => {
