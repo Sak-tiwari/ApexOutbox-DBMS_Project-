@@ -20,3 +20,12 @@
 | W-16 | E-mail delivery is at-most-once: claim = durable SENDING before contacting the provider; unknown outcome or dead worker => UNCERTAIN, never auto-resent; humans resolve it | Phase 4 EMAIL_UNCERTAIN logic, ported to a Postgres outbox | Double-sending an invoice is worse than a delayed one. Definite rejection => FAILED; ordinary errors retry with back-off up to max_attempts. |
 | W-17 | Invoice PDFs: file per invoice on local disk, sha256 in the DB, rebuilt from the immutable snapshot if missing/tampered | Phase 4 PDFs named by invoice number in one folder | Names come only from uuids (no traversal); integrity is checked on every read. Standard PDF fonts cover Latin-1 only: other scripts print as "?". |
 | W-18 | Money: integer paise, BigInt arithmetic, half-up rounding per line, tax per line in basis points | Phase 5 floats | Lines always add up to the total. |
+
+## Stage 5b: frontend
+
+- **W-19 Access token in memory only.** The JWT lives in a module variable, never localStorage/sessionStorage, so XSS cannot read a long-lived credential. A page reload restores the session through the httpOnly refresh cookie. Concurrent 401s share one refresh call because refresh tokens are single-use.
+- **W-20 One origin in dev.** Vite proxies `/api` to :3000 so the SameSite=Strict refresh cookie and the CSRF cookie behave exactly as in production behind a reverse proxy. No CORS is needed in dev.
+- **W-21 SSE via fetch.** EventSource cannot send `Authorization`, so the stream is read with fetch and a small parser. Events carry ids only; each one invalidates TanStack Query caches (coalesced over 250 ms), and every (re)connect invalidates everything because events may be missed while offline.
+- **W-22 No drag-and-drop.** The board moves leads with a "Move to…" control restricted to `allowedNext` from the server; it works with touch, keyboard and screen readers. Moves are optimistic and roll back from a cache snapshot on error (including version conflicts).
+- **W-23 UI hides, server enforces.** Menus and actions follow `permissions` from `GET /api/me`; every route is still authorised server-side.
+- **W-24 Offline.** The service worker precaches the app shell only. `/api/*` is never cached (live, private data); offline the shell loads and views show an error state with retry.

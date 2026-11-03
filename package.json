@@ -16,7 +16,7 @@
     "db:setup": "bash scripts/db-setup.sh",
     "db:migrate": "npm run db:migrate -w server",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
-    "test": "npm test -w server",
+    "test": "npm test -w server && npm test -w web",
     "build": "npm run build -w server && npm run build -w web",
     "audit": "npm audit --omit=dev"
   }
