@@ -5,6 +5,7 @@ import { allowedNext, evaluateTransition, type LeadStatus } from "../domain/pipe
 import { ConflictError, ForbiddenError, NotFoundError, UnprocessableError } from "../errors.js";
 import { cursorTs, decodeCursor, encodeCursor } from "../http/pagination.js";
 import type { AuthContext } from "../middleware/auth.js";
+import type { ImportRow, RowError } from "./csv.js";
 
 export interface LeadView {
   id: string;
@@ -307,6 +308,37 @@ export class LeadsService {
       // Frees the dedupe key so the same business can be added again later.
       await tx.query("UPDATE leads SET deleted_at = now(), dedupe_key = NULL, version = version + 1 WHERE tenant_id = $1 AND id = $2", [actor.tenantId, id]);
       await writeAudit(tx, { tenantId: actor.tenantId, actorId: actor.userId, action: "lead.deleted", entityType: "lead", entityId: id, ip });
+    });
+  }
+
+  /** Inserts validated CSV rows in one transaction. Duplicates are skipped, never overwritten. */
+  async importRows(actor: AuthContext, rows: { line: number; data: ImportRow }[], rejected: RowError[], ip?: string) {
+    return withTenant(this.db, actor.tenantId, async (tx) => {
+      let inserted = 0;
+      let duplicates = 0;
+      const errors = [...rejected];
+      for (const { line, data } of rows) {
+        const res = await tx.query<{ id: string }>(
+          `INSERT INTO leads (tenant_id, name, company_name, email, phone, website, dedupe_key, needs_review, owner_id, source_adapter)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'csv')
+           ON CONFLICT (tenant_id, dedupe_key) WHERE dedupe_key IS NOT NULL AND deleted_at IS NULL DO NOTHING
+           RETURNING id`,
+          [actor.tenantId, data.name, data.companyName, data.email, data.phone, data.website, data.dedupeKey, data.dedupeKey === null, actor.userId],
+        );
+        if (!res.rows[0]) {
+          duplicates++;
+          errors.push({ row: line, message: "Duplicate: a lead for this business already exists" });
+          continue;
+        }
+        inserted++;
+        await tx.query(
+          "INSERT INTO activities (tenant_id, lead_id, type, to_status, reason, actor_id) VALUES ($1, $2, 'IMPORTED', 'NEW', 'CSV import', $3)",
+          [actor.tenantId, res.rows[0].id, actor.userId],
+        );
+      }
+      await writeAudit(tx, { tenantId: actor.tenantId, actorId: actor.userId, action: "lead.csv_imported", metadata: { inserted, duplicates, rejected: rejected.length }, ip });
+      errors.sort((a, b) => a.row - b.row);
+      return { total: rows.length + rejected.length, inserted, duplicates, rejected: rejected.length, errors: errors.slice(0, 50), moreErrors: Math.max(0, errors.length - 50) };
     });
   }
 

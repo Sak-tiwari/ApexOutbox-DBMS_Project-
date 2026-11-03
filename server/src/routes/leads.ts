@@ -1,34 +1,15 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import { z } from "zod";
 import { LEAD_STATUSES } from "../domain/pipeline.js";
 import { isUuid } from "../db/pool.js";
-import { NotFoundError } from "../errors.js";
+import { AppError, NotFoundError } from "../errors.js";
+import { rateLimit } from "../http/rateLimit.js";
+import { CsvFormatError, parseCsv, validateRows } from "../leads/csv.js";
 import { limitSchema } from "../http/pagination.js";
 import { parse } from "../http/validate.js";
 import { LeadsService } from "../leads/service.js";
+import { clean, email, nullable, optionalText, phone, website } from "../leads/validation.js";
 import { authOf, type AuthMiddleware } from "../middleware/auth.js";
-
-// Free text: trimmed, control characters stripped. Output escaping is the UI's job; we never store markup-significant tricks as "safe".
-// eslint-disable-next-line no-control-regex
-const clean = (max: number) => z.string().transform((s) => s.replace(/[\u0000-\u001f\u007f]/g, " ").trim()).pipe(z.string().min(1).max(max));
-const optionalText = (max: number) => z.union([clean(max), z.literal("").transform(() => null), z.null()]);
-
-const email = z.string().trim().toLowerCase().email().max(254);
-const phone = z.string().trim().regex(/^[0-9+().\-\s]{5,40}$/, "Digits, spaces and + ( ) - only");
-/** Only http(s) URLs are accepted, so a lead's website can never be a javascript: or data: link. */
-const website = z
-  .string()
-  .trim()
-  .max(500)
-  .refine((v) => {
-    try {
-      const u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`);
-      return (u.protocol === "http:" || u.protocol === "https:") && !u.username && !u.password && u.hostname.includes(".");
-    } catch {
-      return false;
-    }
-  }, "Must be a valid http(s) website");
-const nullable = <T extends z.ZodType>(s: T) => z.union([s, z.literal("").transform(() => null), z.null()]);
 
 const fields = {
   companyName: optionalText(200),
@@ -69,10 +50,23 @@ const idOf = (raw: unknown) => {
   return raw;
 };
 
-export function createLeadsRouter(deps: { service: LeadsService; auth: AuthMiddleware }) {
+export function createLeadsRouter(deps: { service: LeadsService; auth: AuthMiddleware; now?: () => number }) {
   const { service, auth } = deps;
   const router = Router();
   router.use(auth.requireAuth());
+
+  // CSV upload: raw text body (text/csv), at most 512 KB and 1000 rows. 10 imports per user per hour.
+  const importLimit = rateLimit({ name: "lead-import", limit: 10, windowMs: 60 * 60_000, key: (req) => authOf(req).userId, now: deps.now });
+  router.post("/import", auth.requirePermission("leads:write"), importLimit, express.text({ type: ["text/csv", "text/plain"], limit: "512kb" }), async (req, res) => {
+    if (typeof req.body !== "string" || req.body.length === 0) throw new AppError(415, "UNSUPPORTED_MEDIA_TYPE", "Send the file contents with Content-Type: text/csv");
+    try {
+      const { rows, errors } = validateRows(parseCsv(req.body));
+      res.status(201).json(await service.importRows(authOf(req), rows, errors, req.ip));
+    } catch (err) {
+      if (err instanceof CsvFormatError) throw new AppError(400, err.code, err.message);
+      throw err;
+    }
+  });
 
   router.get("/", auth.requirePermission("leads:read"), async (req, res) => {
     res.json(await service.list(authOf(req), parse(listSchema, req.query, "Query")));

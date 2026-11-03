@@ -64,7 +64,7 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api", createMeRouter({ db, auth }));
   app.use("/api/users", createUsersRouter({ service: new UsersService(db, authService), auth }));
 
-  app.use("/api/leads", createLeadsRouter({ service: new LeadsService(db), auth }));
+  app.use("/api/leads", createLeadsRouter({ service: new LeadsService(db), auth, now: deps.now }));
 
   app.use("/api/scrape", createScrapeRouter({ service: new ScrapeService(db), auth, onJobQueued: deps.onJobQueued, now: deps.now }));
 
