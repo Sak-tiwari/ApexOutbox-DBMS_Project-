@@ -1,0 +1,11 @@
+{
+  "name": "@apexoutbox/web",
+  "version": "2.0.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'web app arrives in stage 5'",
+    "build": "echo 'web app arrives in stage 5'",
+    "typecheck": "echo 'web app arrives in stage 5'"
+  }
+}

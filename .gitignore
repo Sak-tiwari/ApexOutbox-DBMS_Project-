@@ -1,8 +1,12 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 generated-invoices/
+storage/
 backups/
 coverage/
 *.log
 *.tmp
+.vite/

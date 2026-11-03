@@ -1,45 +1,23 @@
 {
-    "name": "apexoutbox",
-    "version": "1.0.0-rc.1",
-    "private": true,
-    "description": "ApexOutbox - lead pipeline + outbox-driven onboarding (Phases 3-5)",
-    "scripts": {
-        "dev": "tsx watch src/server.ts",
-        "test": "vitest run",
-        "start": "node dist/server.js",
-        "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.tests.json",
-        "dev:worker": "tsx watch src/worker.ts",
-        "build": "tsc -p tsconfig.build.json",
-        "start:worker": "node dist/worker.js",
-        "dev:dispatcher": "tsx watch src/phase4/dispatcher.ts",
-        "start:dispatcher": "node dist/phase4/dispatcher.js",
-        "ci": "npm run typecheck && REQUIRE_INTEGRATION=1 vitest run && npm run build",
-        "test:unit": "vitest run tests/unit tests/http",
-        "test:integration": "vitest run tests/integration",
-        "test:legacy": "tsx src/tests/transition.test.ts",
-        "audit": "npm audit --omit=dev",
-        "notices": "node scripts/generate-notices.js"
-    },
-    "dependencies": {
-        "bullmq": "^6.5.3",
-        "dotenv": "^16.5.0",
-        "express": "^5.1.0",
-        "ioredis": "^6.0.0",
-        "mongoose": "^8.16.1",
-        "nodemailer": "^10.3.1",
-        "pdfkit": "^0.20.2",
-        "pino": "^10.4.0",
-        "zod": "^4.1.0"
-    },
-    "devDependencies": {
-        "@types/express": "^5.0.3",
-        "@types/node": "^22.15.30",
-        "@types/nodemailer": "^8.0.2",
-        "@types/pdfkit": "^0.17.7",
-        "@types/supertest": "^7.2.1",
-        "supertest": "^7.3.1",
-        "tsx": "^4.20.5",
-        "typescript": "^5.8.3",
-        "vitest": "^5.0.5"
-    }
+  "name": "apexoutbox",
+  "version": "2.0.0-alpha.1",
+  "private": true,
+  "description": "ApexOutbox - multi-tenant lead scraper and client management (PostgreSQL, Express, React PWA)",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "db:setup": "bash scripts/db-setup.sh",
+    "db:migrate": "npm run db:migrate -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "test": "npm test -w server",
+    "build": "npm run build -w server && npm run build -w web",
+    "audit": "npm audit --omit=dev"
+  }
 }
