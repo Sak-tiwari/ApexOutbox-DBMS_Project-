@@ -8,7 +8,9 @@ import type { Log } from "./logger.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createAuthRouter } from "./routes/auth.js";
 import { createMeRouter } from "./routes/me.js";
+import { createLeadsRouter } from "./routes/leads.js";
 import { createUsersRouter } from "./routes/users.js";
+import { LeadsService } from "./leads/service.js";
 import { UsersService } from "./users/service.js";
 
 export interface AppDeps {
@@ -57,6 +59,8 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/auth", createAuthRouter({ config, service: authService, auth, now: deps.now }));
   app.use("/api", createMeRouter({ db, auth }));
   app.use("/api/users", createUsersRouter({ service: new UsersService(db, authService), auth }));
+
+  app.use("/api/leads", createLeadsRouter({ service: new LeadsService(db), auth }));
 
   app.use((_req, res) => {
     res.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } });
