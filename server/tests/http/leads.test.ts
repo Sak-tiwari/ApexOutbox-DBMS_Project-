@@ -215,14 +215,14 @@ describe("pipeline transitions", () => {
     expect(detail.body.activities[0]).toMatchObject({ fromStatus: "CLOSED_LOST", toStatus: "FOLLOW_UP", reason: "Budget approved next quarter" });
   });
 
-  it("closing as won is not available until the client/invoice flow exists, and changes nothing", async () => {
+  it("closing as won without deal details is refused and changes nothing", async () => {
     const { mk, move } = await setup();
     const lead = await mk();
     await move(lead.id, "CONTACTED", 0);
     await move(lead.id, "NEGOTIATION", 1);
     const res = await move(lead.id, "CLOSED_WON", 2);
     expect(res.status).toBe(422);
-    expect(res.body.error.code).toBe("CLOSED_WON_UNAVAILABLE");
+    expect(res.body.error.code).toBe("DEAL_REQUIRED");
     expect((await ownerPool().query("SELECT status, version FROM leads WHERE id = $1", [lead.id])).rows[0]).toEqual({ status: "NEGOTIATION", version: 2 });
   });
 });

@@ -7,6 +7,7 @@ import { rateLimit } from "../http/rateLimit.js";
 import { CsvFormatError, parseCsv, validateRows } from "../leads/csv.js";
 import { limitSchema } from "../http/pagination.js";
 import { parse } from "../http/validate.js";
+import { MAX_QUANTITY, MAX_UNIT_MINOR } from "../invoices/money.js";
 import { LeadsService } from "../leads/service.js";
 import { clean, email, nullable, optionalText, phone, website } from "../leads/validation.js";
 import { authOf, type AuthMiddleware } from "../middleware/auth.js";
@@ -30,7 +31,31 @@ const patchSchema = z
     version: z.ZodNumber;
   } & { [K in keyof typeof fields]: z.ZodOptional<(typeof fields)[K]> })
   .strict();
-const transitionSchema = z.object({ to: z.enum(LEAD_STATUSES), version: z.number().int().min(0), reason: z.string().trim().max(1000).optional() }).strict();
+const addressField = z.string().trim().max(200).optional();
+const dealSchema = z
+  .object({
+    email,
+    billingAddress: z.object({ line1: addressField, line2: addressField, city: addressField, state: addressField, postalCode: addressField, country: addressField }).strict()
+      .transform((a) => Object.fromEntries(Object.entries(a).filter(([, v]) => !!v)) as Record<string, string>).optional(),
+    taxId: z.string().trim().max(40).nullable().optional(),
+    items: z
+      .array(
+        z.object({
+          description: clean(500),
+          quantity: z.number().positive().max(MAX_QUANTITY).refine((q) => Math.abs(q * 1000 - Math.round(q * 1000)) < 1e-6, "At most 3 decimals"),
+          unitAmountMinor: z.number().int().min(0).max(MAX_UNIT_MINOR),
+          taxRateBp: z.number().int().min(0).max(10_000).optional(),
+        }).strict(),
+      )
+      .min(1)
+      .max(50)
+      .optional(),
+    currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+    dueInDays: z.number().int().min(0).max(365).optional(),
+    sendEmail: z.boolean().optional(),
+  })
+  .strict();
+const transitionSchema = z.object({ to: z.enum(LEAD_STATUSES), version: z.number().int().min(0), reason: z.string().trim().max(1000).optional(), deal: dealSchema.optional() }).strict();
 const noteSchema = z.object({ note: clean(1000) }).strict();
 
 const bool = z.enum(["true", "false"]).transform((v) => v === "true");
@@ -50,7 +75,7 @@ const idOf = (raw: unknown) => {
   return raw;
 };
 
-export function createLeadsRouter(deps: { service: LeadsService; auth: AuthMiddleware; now?: () => number }) {
+export function createLeadsRouter(deps: { service: LeadsService; auth: AuthMiddleware; now?: () => number; onEmailQueued?: () => void }) {
   const { service, auth } = deps;
   const router = Router();
   router.use(auth.requireAuth());
@@ -84,7 +109,9 @@ export function createLeadsRouter(deps: { service: LeadsService; auth: AuthMiddl
     res.json(await service.update(authOf(req), idOf(req.params.id), parse(patchSchema, req.body), req.ip));
   });
   router.post("/:id/transition", auth.requirePermission("leads:write"), async (req, res) => {
-    res.json(await service.transition(authOf(req), idOf(req.params.id), parse(transitionSchema, req.body), req.ip));
+    const result = await service.transition(authOf(req), idOf(req.params.id), parse(transitionSchema, req.body), req.ip);
+    if (result.conversion?.emailQueued) deps.onEmailQueued?.();
+    res.json(result);
   });
   router.post("/:id/notes", auth.requirePermission("leads:write"), async (req, res) => {
     await service.addNote(authOf(req), idOf(req.params.id), parse(noteSchema, req.body).note);

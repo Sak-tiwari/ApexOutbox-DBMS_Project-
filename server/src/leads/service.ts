@@ -5,6 +5,7 @@ import { allowedNext, evaluateTransition, type LeadStatus } from "../domain/pipe
 import { ConflictError, ForbiddenError, NotFoundError, UnprocessableError } from "../errors.js";
 import { cursorTs, decodeCursor, encodeCursor } from "../http/pagination.js";
 import type { AuthContext } from "../middleware/auth.js";
+import { issueInvoice, type TenantInvoiceSettings } from "../invoices/service.js";
 import type { ImportRow, RowError } from "./csv.js";
 
 export interface LeadView {
@@ -70,6 +71,24 @@ export interface LeadFilters {
   unowned?: boolean;
   needsReview?: boolean;
   followUpDue?: boolean;
+}
+
+export interface Deal {
+  email: string;
+  billingAddress?: Record<string, string>;
+  taxId?: string | null;
+  items?: { description: string; quantity: number; unitAmountMinor: number; taxRateBp?: number }[];
+  currency?: string;
+  dueInDays?: number;
+  sendEmail?: boolean;
+}
+
+export interface Conversion {
+  clientId: string;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  totalMinor: number | null;
+  emailQueued: boolean;
 }
 
 export interface LeadInput {
@@ -253,7 +272,7 @@ export class LeadsService {
     });
   }
 
-  async transition(actor: AuthContext, id: string, input: { to: LeadStatus; version: number; reason?: string }, ip?: string) {
+  async transition(actor: AuthContext, id: string, input: { to: LeadStatus; version: number; reason?: string; deal?: Deal }, ip?: string): Promise<LeadView & { conversion?: Conversion }> {
     return withTenant(this.db, actor.tenantId, async (tx) => {
       const current = await this.find(tx, actor.tenantId, id, true);
       assertCanWrite(actor, current);
@@ -266,9 +285,10 @@ export class LeadsService {
         });
       }
       if (verdict.sideEffects.includes("CREATE_CLIENT_AND_OUTBOX_EVENT")) {
-        // Wired up in stage 4 (client + invoice + e-mail in one transaction).
-        throw new UnprocessableError("Closing a lead as won needs deal details", "CLOSED_WON_UNAVAILABLE");
+        if (!input.deal) throw new UnprocessableError("Closing a lead as won needs the client's e-mail and what to bill", "DEAL_REQUIRED");
+        return this.closeWon(tx, actor, current, input.version, input.deal, input.reason, ip);
       }
+      if (input.deal) throw new UnprocessableError("Deal details are only accepted when closing a lead as won", "DEAL_NOT_ALLOWED");
 
       const { rows } = await tx.query<Row>(
         `UPDATE leads SET status = $3, version = version + 1
@@ -289,6 +309,55 @@ export class LeadsService {
       });
       return leadView(updated);
     });
+  }
+
+  /**
+   * The conversion, all in the caller's transaction: client, lead -> CLOSED_WON, history, invoice with the next
+   * gapless number, and the queued e-mail. Any failure rolls everything back, so there is never a won lead without
+   * its client, or an invoice number that was used but not recorded.
+   */
+  private async closeWon(tx: Tx, actor: AuthContext, lead: Row, version: number, deal: Deal, reason: string | undefined, ip?: string) {
+    const tenant = (await tx.query<{ name: string; settings: { features?: { invoices?: boolean; email?: boolean }; invoice?: TenantInvoiceSettings } }>(
+      "SELECT name, settings FROM tenants WHERE id = $1", [actor.tenantId])).rows[0]!;
+    const invoicesOn = tenant.settings.features?.invoices !== false;
+    const emailOn = tenant.settings.features?.email !== false;
+    if (invoicesOn && !deal.items?.length) throw new UnprocessableError("Add at least one invoice line to close this lead as won", "DEAL_ITEMS_REQUIRED");
+
+    const clientRow = await tx.query<{ id: string }>(
+      `INSERT INTO clients (tenant_id, lead_id, name, company_name, email, phone, billing_address, tax_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (tenant_id, lead_id) DO NOTHING RETURNING id`,
+      [actor.tenantId, lead.id, lead.name, lead.company_name, deal.email, lead.phone, JSON.stringify(deal.billingAddress ?? {}), deal.taxId ?? null],
+    );
+    const clientId = clientRow.rows[0]?.id ?? (await tx.query<{ id: string }>("SELECT id FROM clients WHERE tenant_id = $1 AND lead_id = $2", [actor.tenantId, lead.id])).rows[0]!.id;
+
+    const updated = await tx.query<Row>(
+      `UPDATE leads SET status = 'CLOSED_WON', client_id = $3, version = version + 1
+        WHERE tenant_id = $1 AND id = $2 AND version = $4 AND deleted_at IS NULL RETURNING ${COLUMNS}`,
+      [actor.tenantId, lead.id, clientId, version],
+    );
+    if (!updated.rows[0]) throw await this.versionConflict(tx, actor.tenantId, lead.id);
+    await tx.query(
+      `INSERT INTO activities (tenant_id, lead_id, type, from_status, to_status, reason, actor_id) VALUES
+         ($1, $2, 'STATUS_CHANGED', $3, 'CLOSED_WON', $4, $5), ($1, $2, 'CONVERTED', NULL, NULL, 'Client created', $5)`,
+      [actor.tenantId, lead.id, lead.status, reason?.trim() || null, actor.userId],
+    );
+
+    let invoice: { id: string; number: string; totalMinor: number } | null = null;
+    const sendEmail = emailOn && deal.sendEmail !== false;
+    if (invoicesOn) {
+      const settings = { prefix: "INV", currency: "INR", defaultTaxRateBp: 1800, ...tenant.settings.invoice };
+      invoice = await issueInvoice(tx, {
+        tenantId: actor.tenantId, tenantName: tenant.name, settings, clientId, leadId: lead.id,
+        idempotencyKey: `conversion:${lead.id}`,
+        client: { name: lead.name, company: lead.company_name, email: deal.email, phone: lead.phone, taxId: deal.taxId ?? null, billingAddress: deal.billingAddress ?? {} },
+        items: deal.items!, currency: deal.currency, dueInDays: deal.dueInDays ?? 15, sendTo: sendEmail ? deal.email : undefined, actorId: actor.userId,
+      });
+    }
+    await writeAudit(tx, { tenantId: actor.tenantId, actorId: actor.userId, action: "lead.won", entityType: "lead", entityId: lead.id, metadata: { clientId, invoice: invoice?.number ?? null }, ip });
+    return {
+      ...leadView(updated.rows[0]),
+      conversion: { clientId, invoiceId: invoice?.id ?? null, invoiceNumber: invoice?.number ?? null, totalMinor: invoice?.totalMinor ?? null, emailQueued: invoicesOn && sendEmail },
+    };
   }
 
   async addNote(actor: AuthContext, id: string, note: string) {

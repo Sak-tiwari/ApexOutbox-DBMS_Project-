@@ -95,10 +95,21 @@ describe("configuration", () => {
     expect(() => parseConfig({ ...ok, PORT: "70000" })).toThrow(/PORT/);
   });
 
+  const smtp = { SMTP_HOST: "smtp.example.com", SMTP_USER: "u", SMTP_PASS: "p", EMAIL_FROM: "billing@example.com" };
+
   it("production forces secure cookies and https origins", () => {
-    expect(parseConfig({ ...ok, NODE_ENV: "production", ALLOWED_ORIGINS: "https://app.example.com" }).cookieSecure).toBe(true);
-    expect(() => parseConfig({ ...ok, NODE_ENV: "production", ALLOWED_ORIGINS: "http://app.example.com" })).toThrow(/https/);
-    expect(() => parseConfig({ ...ok, NODE_ENV: "production", ALLOWED_ORIGINS: "https://app.example.com", COOKIE_SECURE: "false" })).toThrow(/COOKIE_SECURE/);
+    const prod = { ...ok, ...smtp, NODE_ENV: "production" };
+    expect(parseConfig({ ...prod, ALLOWED_ORIGINS: "https://app.example.com" }).cookieSecure).toBe(true);
+    expect(() => parseConfig({ ...prod, ALLOWED_ORIGINS: "http://app.example.com" })).toThrow(/https/);
+    expect(() => parseConfig({ ...prod, ALLOWED_ORIGINS: "https://app.example.com", COOKIE_SECURE: "false" })).toThrow(/COOKIE_SECURE/);
+  });
+
+  it("e-mail: log mode by default in development, smtp when configured, never log mode in production", () => {
+    expect(parseConfig(ok).emailMode).toBe("log");
+    expect(parseConfig({ ...ok, ...smtp }).emailMode).toBe("smtp");
+    expect(() => parseConfig({ ...ok, SMTP_HOST: "smtp.example.com" })).toThrow(/SMTP_USER/);
+    expect(() => parseConfig({ ...ok, NODE_ENV: "production", ALLOWED_ORIGINS: "https://a.example.com" })).toThrow(/EMAIL_MODE/);
+    expect(() => parseConfig({ ...ok, ...smtp, EMAIL_MODE: "log", NODE_ENV: "production", ALLOWED_ORIGINS: "https://a.example.com" })).toThrow(/EMAIL_MODE/);
   });
 
   it("origins must be bare origins", () => {

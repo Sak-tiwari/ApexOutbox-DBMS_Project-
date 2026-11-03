@@ -3,6 +3,10 @@ import { createApp } from "./app.js";
 import { parseConfig } from "./config.js";
 import { assertRlsEffective, createPool } from "./db/pool.js";
 import { createLogger } from "./logger.js";
+import { EmailWorker } from "./email/worker.js";
+import { createMailer } from "./email/mailer.js";
+import { InvoiceStorage } from "./invoices/storage.js";
+import { InvoicesService } from "./invoices/service.js";
 import { ScrapeWorker } from "./scraper/worker.js";
 
 async function main() {
@@ -15,14 +19,20 @@ async function main() {
 
   // The scraper runs in-process; it can be split into its own process later because it only talks to Postgres.
   const worker = new ScrapeWorker({ db, log });
-  const app = createApp({ db, log, config, onJobQueued: () => worker.poke() });
+  const invoices = new InvoicesService(db, new InvoiceStorage(config.INVOICE_STORAGE_DIR));
+  const emailWorker = new EmailWorker({
+    db, log, invoices, mailer: createMailer(config, log),
+    messageIdDomain: config.EMAIL_FROM?.includes("@") ? config.EMAIL_FROM.split("@").pop()!.replace(/[^A-Za-z0-9.-]/g, "") : undefined,
+  });
+  const app = createApp({ db, log, config, invoices, onJobQueued: () => worker.poke(), onEmailQueued: () => emailWorker.poke() });
   worker.start();
+  emailWorker.start();
   const server = app.listen(config.PORT, () => log.info({ port: config.PORT }, "API listening"));
 
   const shutdown = (signal: string) => {
     log.info({ signal }, "shutting down");
     server.close(() => {
-      worker.stop().then(() => db.end()).finally(() => process.exit(0));
+      Promise.all([worker.stop(), emailWorker.stop()]).then(() => db.end()).finally(() => process.exit(0));
     });
     setTimeout(() => process.exit(1), 10_000).unref();
   };

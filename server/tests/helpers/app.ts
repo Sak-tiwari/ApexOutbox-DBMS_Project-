@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import os from "node:os";
+import path from "node:path";
 import request from "supertest";
 import type { Express } from "express";
 import { AuthService } from "../../src/auth/service.js";
@@ -19,6 +21,7 @@ export function testConfig(overrides: Record<string, string | undefined> = {}): 
     TOTP_ENC_KEY: Buffer.alloc(32, 7).toString("base64"),
     ALLOWED_ORIGINS: TEST_ORIGIN,
     COOKIE_SECURE: "false",
+    INVOICE_STORAGE_DIR: path.join(os.tmpdir(), "apex-test-invoices"),
     ...overrides,
   });
 }

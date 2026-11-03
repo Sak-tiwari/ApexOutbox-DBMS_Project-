@@ -33,6 +33,17 @@ const schema = z
     LOGIN_MAX_FAILURES: z.coerce.number().int().min(3).max(20).default(5),
     LOGIN_LOCK_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
 
+    // --- e-mail ---
+    // "smtp" sends through SMTP_*; "log" only records the message (development). Production must use smtp.
+    EMAIL_MODE: z.enum(["smtp", "log"]).optional(),
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASS: z.string().optional(),
+    EMAIL_FROM: z.string().max(200).optional(),
+    // Where issued invoice PDFs are stored (a directory, one file per invoice). Back it up with the database.
+    INVOICE_STORAGE_DIR: z.string().default("./storage/invoices"),
+
     // Browser origins allowed to call the API with credentials (CSRF Origin check, CORS). Comma-separated.
     ALLOWED_ORIGINS: z.string().default("http://localhost:5173"),
     // Mark cookies Secure. Defaults to true in production, false otherwise (plain http on localhost).
@@ -54,6 +65,13 @@ const schema = z
         ctx.addIssue({ code: "custom", path: ["ALLOWED_ORIGINS"], message: `"${origin}" must be an origin like https://app.example.com (no path, no trailing slash)` });
       }
     }
+    const mode = env.EMAIL_MODE ?? (env.SMTP_HOST ? "smtp" : "log");
+    if (mode === "smtp" && (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS || !env.EMAIL_FROM)) {
+      ctx.addIssue({ code: "custom", path: ["SMTP_HOST"], message: "SMTP_HOST, SMTP_USER, SMTP_PASS and EMAIL_FROM are all required for EMAIL_MODE=smtp" });
+    }
+    if (env.NODE_ENV === "production" && mode !== "smtp") {
+      ctx.addIssue({ code: "custom", path: ["EMAIL_MODE"], message: "must be smtp in production (log mode would silently lose invoices)" });
+    }
     if (env.NODE_ENV === "production" && env.COOKIE_SECURE === "false") {
       ctx.addIssue({ code: "custom", path: ["COOKIE_SECURE"], message: "cannot be false in production" });
     }
@@ -63,6 +81,7 @@ const schema = z
     allowedOrigins: env.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
     cookieSecure: env.COOKIE_SECURE ? env.COOKIE_SECURE === "true" : env.NODE_ENV === "production",
     totpKey: Buffer.from(env.TOTP_ENC_KEY, "base64"),
+    emailMode: (env.EMAIL_MODE ?? (env.SMTP_HOST ? "smtp" : "log")) as "smtp" | "log",
   }));
 
 export type Config = z.infer<typeof schema>;
