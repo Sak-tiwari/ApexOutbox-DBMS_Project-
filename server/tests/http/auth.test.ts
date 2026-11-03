@@ -292,7 +292,8 @@ describe("CSRF protection on cookie-authenticated endpoints", () => {
 
     const foreign = await post().set({ ...good, Origin: "https://evil.example" });
     expect(foreign.status).toBe(403);
-    expect(foreign.body.error.code).toBe("CSRF_ORIGIN");
+    // Refused by the global CORS allowlist before the CSRF layer even runs (two independent defences).
+    expect(foreign.body.error.code).toBe("CORS_ORIGIN");
 
     const noOrigin = await post().set({ Cookie: good.Cookie, "X-CSRF-Token": "csrf-token-for-tests" });
     expect(noOrigin.status).toBe(403);

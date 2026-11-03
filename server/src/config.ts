@@ -51,6 +51,8 @@ const schema = z
       .enum(["true", "false"])
       .optional(),
     // Number of reverse-proxy hops in front of the API (0 = none). Needed for correct client IPs.
+    // Optional: directory of the built web app (web/dist). When set, this server also serves the SPA with a strict CSP.
+    WEB_DIST_DIR: z.string().trim().min(1).optional(),
     TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(0),
   })
   .superRefine((env, ctx) => {
