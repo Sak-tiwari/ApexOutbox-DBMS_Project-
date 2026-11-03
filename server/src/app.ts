@@ -13,6 +13,8 @@ import { EmailService } from "./email/service.js";
 import { InvoiceStorage } from "./invoices/storage.js";
 import { InvoicesService } from "./invoices/service.js";
 import { createClientsRouter, createEmailsRouter, createInvoicesRouter } from "./routes/billing.js";
+import type { RealtimeHub } from "./realtime/hub.js";
+import { createEventsRouter } from "./routes/events.js";
 import { createScrapeRouter } from "./routes/scrape.js";
 import { ScrapeService } from "./scraper/service.js";
 import { createLeadsRouter } from "./routes/leads.js";
@@ -32,6 +34,10 @@ export interface AppDeps {
   onEmailQueued?: () => void;
   /** Share one InvoicesService (and its PDF storage) with the e-mail worker. */
   invoices?: InvoicesService;
+  /** Live-update hub. Without one, GET /api/events is not mounted. */
+  hub?: RealtimeHub;
+  /** Test hooks for the event stream. */
+  streamOptions?: { maxStreamMs?: number; heartbeatMs?: number };
 }
 
 async function withDeadline(work: Promise<boolean>, ms: number): Promise<boolean> {
@@ -76,6 +82,7 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/leads", createLeadsRouter({ service: new LeadsService(db), auth, now: deps.now, onEmailQueued: deps.onEmailQueued }));
 
   const invoices = deps.invoices ?? new InvoicesService(db, new InvoiceStorage(config.INVOICE_STORAGE_DIR));
+  if (deps.hub) app.use("/api/events", createEventsRouter({ hub: deps.hub, auth, ...deps.streamOptions }));
   app.use("/api/clients", createClientsRouter({ service: new ClientsService(db), auth }));
   app.use("/api/invoices", createInvoicesRouter({ service: invoices, auth, onEmailQueued: deps.onEmailQueued }));
   app.use("/api/emails", createEmailsRouter({ service: new EmailService(db), auth, onEmailQueued: deps.onEmailQueued }));

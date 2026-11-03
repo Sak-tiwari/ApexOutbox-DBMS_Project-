@@ -7,6 +7,7 @@ import { EmailWorker } from "./email/worker.js";
 import { createMailer } from "./email/mailer.js";
 import { InvoiceStorage } from "./invoices/storage.js";
 import { InvoicesService } from "./invoices/service.js";
+import { RealtimeHub } from "./realtime/hub.js";
 import { ScrapeWorker } from "./scraper/worker.js";
 
 async function main() {
@@ -24,7 +25,9 @@ async function main() {
     db, log, invoices, mailer: createMailer(config, log),
     messageIdDomain: config.EMAIL_FROM?.includes("@") ? config.EMAIL_FROM.split("@").pop()!.replace(/[^A-Za-z0-9.-]/g, "") : undefined,
   });
-  const app = createApp({ db, log, config, invoices, onJobQueued: () => worker.poke(), onEmailQueued: () => emailWorker.poke() });
+  const hub = new RealtimeHub(db, log);
+  await hub.start();
+  const app = createApp({ db, log, config, invoices, hub, onJobQueued: () => worker.poke(), onEmailQueued: () => emailWorker.poke() });
   worker.start();
   emailWorker.start();
   const server = app.listen(config.PORT, () => log.info({ port: config.PORT }, "API listening"));
@@ -32,7 +35,7 @@ async function main() {
   const shutdown = (signal: string) => {
     log.info({ signal }, "shutting down");
     server.close(() => {
-      Promise.all([worker.stop(), emailWorker.stop()]).then(() => db.end()).finally(() => process.exit(0));
+      Promise.all([worker.stop(), emailWorker.stop(), hub.close()]).then(() => db.end()).finally(() => process.exit(0));
     });
     setTimeout(() => process.exit(1), 10_000).unref();
   };
