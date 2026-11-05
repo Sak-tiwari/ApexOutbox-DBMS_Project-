@@ -39,7 +39,7 @@
 | Duplicate jobs / duplicate processing | Done (same job twice, 5 concurrent jobs, replayed events, replayed API calls). |
 | Invalid transitions | Done. |
 | Email timeouts | Done (injected transport; real SMTP not tested). |
-| Scraper changes | Not possible: Phase 2 does not exist yet. |
+| Scraper changes | Done: Phase 2 scraper integrated (see below). Tested with real Crawlee against a local server, on MongoDB, over HTTP and in a real browser. |
 | Structured logs, metrics, alerts | Logs and metrics done; alert rules are suggestions in the runbook. |
 | Backup / restore test | Scripts written, **not run** (no `mongodump` here). |
 | Secrets management / access control | API keys, redaction, production config checks. Per-process rate limiting added (`RATE_LIMIT_PER_MINUTE`); no secret-store integration. |
@@ -77,3 +77,17 @@ Without `redis-server`, or without a MongoDB-compatible server, the affected fil
 `REQUIRE_INTEGRATION=1` turns that into a failure; `REQUIRE_REAL_MONGO=1` also rejects FerretDB so the two atomicity tests
 cannot be skipped. `.github/workflows/ci.yml` sets both and runs against `mongo:7`. **That workflow has not run yet**: it
 will on the first push; check its result.
+
+
+## Scraper integration
+
+| Area | Evidence |
+|---|---|
+| SSRF defence | 36 unit tests: private/loopback/link-local/IPv6/mapped/decimal/hex addresses, DNS that points inside, `localhost.`, ports, credentials, schemes. Redirects to `169.254.169.254` and `localhost` are refused in an integration test. |
+| Extraction | mailto links, `[at]`/`&#64;` obfuscation, no gluing of neighbouring elements, image names, cap of 20, 2 MB page limit; a ReDoS found while testing (quadratic regex on a 3 MB page) was fixed. |
+| Real crawl | Real Crawlee against a local server: success, no emails, robots.txt refusal, redirect, redirect loop, redirect into an internal address, PDF, 50 MB declared body, 404, 500, closed port. |
+| Jobs and leads on MongoDB | enqueue de-duplication, atomic claim, stale-job recovery, one lead per website and contact, per-user separation. The concurrent-claim and concurrent-upsert race tests need real MongoDB (skipped on FerretDB). |
+| HTTP | auth, validation, bare domain, per-user cap of 10 waiting scrapes, ownership of job ids. |
+| Browser | 32 checks including: scrape a demo page, lead appears with its emails, repeat scrape adds nothing, robots refusal, internal address refused, scraped lead taken to Closed-Won with the scraped email pre-filled, invoice + PDF + email sent. |
+
+Not tested: the public internet (the sandbox only reaches an allow-list), JavaScript-rendered sites (not supported: plain HTML only), DNS rebinding between the safety check and the fetch (a known limit of checking before fetching).

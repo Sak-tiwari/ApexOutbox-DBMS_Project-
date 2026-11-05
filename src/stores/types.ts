@@ -14,6 +14,10 @@ export interface LeadRecord {
   onboardingStatus?: OnboardingStatus;
   onboardingAttempts: number;
   onboardingError: string;
+  website?: string;
+  email?: string;
+  emails?: string[];
+  source?: string;
 }
 
 export interface ListLeadsQuery {
@@ -31,6 +35,16 @@ export interface NewLead {
   company: string;
   ownerId: string;
   followUpDate?: Date;
+}
+
+export interface ScrapedLead {
+  ownerId: string;
+  name: string;
+  company: string;
+  website: string;
+  email?: string;
+  emails: string[];
+  source: string;
 }
 
 export interface TransitionWrite {
@@ -53,6 +67,8 @@ export interface LeadStore {
   applyTransition(write: TransitionWrite): Promise<LeadRecord | null>;
   list(query: ListLeadsQuery): Promise<{ items: LeadRecord[]; nextCursor: string | null }>;
   create(lead: NewLead): Promise<LeadRecord>;
+  /** One lead per website+contact: scraping the same page again returns the existing lead (created=false). */
+  upsertScraped(lead: ScrapedLead): Promise<{ lead: LeadRecord; created: boolean }>;
   /** A lead that left Closed-Won while its onboarding was still PENDING must not be onboarded any more. */
   cancelPendingOnboarding(id: string): Promise<void>;
   findOnboardingPending(limit: number): Promise<LeadRecord[]>;

@@ -8,6 +8,9 @@ import path from 'node:path';
 import { createOnboardingRouter } from './phase4/api';
 import { ALLOWED_TRANSITIONS } from './services/TransitionService';
 import { createInvoiceRouter, type InvoiceReader } from './routes/invoiceRoutes';
+import { createScrapeRouter } from './routes/scrapeRoutes';
+import type { ScrapeJobStore } from './scraper/jobs';
+import type { SafeUrlOptions } from './scraper/safeUrl';
 import type { Log } from './phase4/ports';
 import type { Metrics } from './metrics';
 
@@ -28,6 +31,9 @@ export interface AppDeps extends LeadRouterDeps {
   publicDir?: string;
   /** Shown in the UI so nobody mistakes demo mode for real delivery. */
   emailMode?: 'smtp' | 'demo';
+  /** Enables POST/GET /api/scrape-jobs (the worker does the scraping). */
+  scrapeJobs?: ScrapeJobStore;
+  scraperSafeUrl?: SafeUrlOptions;
 }
 
 async function probe(fn: () => Promise<boolean> | boolean): Promise<boolean> {
@@ -94,8 +100,9 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api', rateLimit({ limit: deps.rateLimitPerMinute ?? 0 }));
   app.use('/api/leads', auth, createLeadRouter(deps));
   app.get('/api/meta', auth, (_req, res) => {
-    res.json({ success: true, data: { transitions: ALLOWED_TRANSITIONS, reasonRequiredFrom: ['Closed-Won', 'Closed-Lost'], emailMode: deps.emailMode ?? 'demo' } });
+    res.json({ success: true, data: { transitions: ALLOWED_TRANSITIONS, reasonRequiredFrom: ['Closed-Won', 'Closed-Lost'], emailMode: deps.emailMode ?? 'demo', scraper: Boolean(deps.scrapeJobs), demoPages: Boolean(deps.scraperSafeUrl?.allowLoopback) } });
   });
+  if (deps.scrapeJobs) app.use('/api/scrape-jobs', auth, createScrapeRouter({ jobs: deps.scrapeJobs, safeUrl: deps.scraperSafeUrl ?? {} }));
   if (deps.invoices) app.use('/api/invoices', auth, createInvoiceRouter({ invoices: deps.invoices, invoiceDir: deps.invoiceDir ?? 'generated-invoices' }));
   app.use('/api/phase4', auth, createOnboardingRouter());
 

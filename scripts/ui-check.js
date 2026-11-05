@@ -137,6 +137,45 @@ const check = (name, ok, extra = "") => { results.push(ok); console.log(`${ok ? 
   check("mobile: page itself does not scroll sideways (board scrolls inside itself)", !overflowX);
   await mp.screenshot({ path: `${SHOTS}/5-mobile.png` });
 
+  // ---- website scraper ----
+  await page.waitForSelector("#scrapePanel:not([hidden])");
+  check("scraper panel and demo-page shortcuts are visible", await page.isVisible("#demos"));
+  const before = await page.locator(".card").count();
+  await page.click('[data-demo="bakery"]');
+  await page.waitForFunction(() => /Done/.test(document.getElementById("jobs").textContent), null, { timeout: 30000 });
+  check("demo page scraped by the worker: job shows Done with the emails found", /orders@bloombakery\.test/.test(await page.textContent("#jobs")) && /press@bloombakery\.test/.test(await page.textContent("#jobs")));
+  await page.waitForFunction((n) => document.querySelectorAll(".card").length === n + 1, before);
+  const scraped = page.locator('.col[data-state="New"] .card', { hasText: "Bloom Bakery" });
+  check("scraped lead appears in New with the Scraped chip, website and email", (await scraped.count()) === 1 && /Scraped/.test(await scraped.textContent()) && /orders@bloombakery\.test/.test(await scraped.textContent()));
+  await page.screenshot({ path: `${SHOTS}/6-scraper.png`, fullPage: true });
+
+  await page.click('[data-demo="bakery"]');
+  await page.waitForFunction(() => /Already in your pipeline/.test(document.getElementById("toasts").textContent), null, { timeout: 30000 });
+  check("scraping the same page again does not create a duplicate lead", (await page.locator(".card").count()) === before + 1);
+
+  await page.click('[data-demo="private"]');
+  await page.waitForFunction(() => /robots\.txt/.test(document.getElementById("jobs").textContent), null, { timeout: 30000 });
+  check("a page blocked by robots.txt is refused with a clear reason", /Failed/.test(await page.textContent("#jobs")));
+
+  await page.fill("#scrapeUrl", BASE + "/api/leads");
+  await page.click("#btnScrape");
+  await page.waitForFunction(() => document.getElementById("scrapeErr").textContent.length > 0);
+  check("an internal address is refused before anything is queued", /cannot be scraped/.test(await page.textContent("#scrapeErr")));
+
+  await scraped.locator("[data-act=move][data-to=Contacted]").click();
+  await page.waitForSelector('.col[data-state="Contacted"] .card:has-text("Bloom Bakery")');
+  await page.locator('.col[data-state="Contacted"] .card:has-text("Bloom Bakery") [data-act=move][data-to="Follow-up"]').click();
+  await page.waitForSelector('.col[data-state="Follow-up"] .card:has-text("Bloom Bakery")');
+  await page.locator('.col[data-state="Follow-up"] .card:has-text("Bloom Bakery") [data-act=move][data-to="Negotiation"]').click();
+  await page.waitForSelector('.col[data-state="Negotiation"] .card:has-text("Bloom Bakery")');
+  await page.locator('.col[data-state="Negotiation"] .card:has-text("Bloom Bakery") [data-act=move][data-to="Closed-Won"]').click();
+  await page.waitForSelector("#fDeal");
+  check("closing a scraped lead pre-fills the client email found by the scraper", (await page.inputValue("#fDeal [name=email]")) === "orders@bloombakery.test");
+  await page.click("#fDeal button[type=submit]");
+  await page.waitForSelector('#invBody tr:has-text("orders@bloombakery.test"):has-text("Email sent")', { timeout: 25000 });
+  check("full chain: scraped lead -> Closed-Won -> invoice + PDF -> email sent to the scraped address", true);
+  await page.screenshot({ path: `${SHOTS}/7-scraped-to-invoice.png`, fullPage: true });
+
   // key is remembered across reload
   await page.reload();
   await page.waitForSelector("#app:not([hidden])");

@@ -1,0 +1,3 @@
+# Demo robots.txt: shows that the ApexOutbox scraper respects it.
+User-agent: *
+Disallow: /demo/private.html

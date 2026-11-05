@@ -32,6 +32,13 @@ export interface ILead extends Document {
     onboardingStatus?: OnboardingStatus;
     onboardingAttempts?: number;
     onboardingError?: string;
+    // Set when the lead was found by the website scraper.
+    website?: string;
+    email?: string;
+    emails?: string[];
+    source?: string;
+    /** ownerId|origin|email - one lead per website and contact, enforced by a unique index. */
+    dedupeKey?: string;
 }
 
 const ActivityLogSchema = new Schema<IActivityLog>({
@@ -65,7 +72,12 @@ const LeadSchema = new Schema<ILead>({
     },
     onboardingStatus: { type: String, enum: ['PENDING', 'DONE', 'FAILED', 'CANCELLED'], default: undefined },
     onboardingAttempts: { type: Number, default: 0 },
-    onboardingError: { type: String, default: '' }
+    onboardingError: { type: String, default: '' },
+    website: { type: String, trim: true, maxlength: 2000 },
+    email: { type: String, lowercase: true, trim: true },
+    emails: { type: [String], default: undefined },
+    source: { type: String, trim: true, maxlength: 100 },
+    dedupeKey: { type: String }
 }, {
     timestamps: true,
     optimisticConcurrency: true // Enforces version checks (__v) automatically
@@ -76,3 +88,4 @@ export const Lead = model<ILead>('Lead', LeadSchema);
 // Reconciler query: Closed-Won leads whose hand-off to Phase 4 has not completed.
 LeadSchema.index({ onboardingStatus: 1, updatedAt: 1 });
 LeadSchema.index({ ownerId: 1, currentState: 1 });
+LeadSchema.index({ dedupeKey: 1 }, { unique: true, sparse: true });

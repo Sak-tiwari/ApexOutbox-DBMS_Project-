@@ -13,6 +13,7 @@ import { OutboxEvent } from "./phase4/outbox";
 import { Lead } from "./models/Lead";
 import path from "node:path";
 import { MongoInvoiceReader } from "./phase4/mongoStores";
+import { MongoScrapeJobStore, ScrapeJob } from "./scraper/jobs";
 
 async function startServer() {
     const config = parseConfig();
@@ -35,6 +36,8 @@ async function startServer() {
         invoices: new MongoInvoiceReader(),
         invoiceDir: config.INVOICE_DIR,
         emailMode: config.SMTP_HOST ? "smtp" : "demo",
+        scrapeJobs: new MongoScrapeJobStore(),
+        scraperSafeUrl: { allowLoopback: config.scraperAllowLoopback },
         // src/ (tsx) and dist/ (build) are both one level below the project root.
         publicDir: path.resolve(__dirname, "..", "public"),
         checks: {
@@ -48,6 +51,8 @@ async function startServer() {
             apexoutbox_invoices_email_failed: await Invoice.countDocuments({ status: "EMAIL_FAILED" }),
             apexoutbox_invoices_email_abandoned: await Invoice.countDocuments({ status: "EMAIL_ABANDONED" }),
             apexoutbox_invoices_email_sending: await Invoice.countDocuments({ status: "EMAIL_SENDING" }),
+            apexoutbox_scrape_jobs_queued: await ScrapeJob.countDocuments({ status: "QUEUED" }),
+            apexoutbox_scrape_jobs_failed: await ScrapeJob.countDocuments({ status: "FAILED" }),
             apexoutbox_leads_onboarding_pending: await Lead.countDocuments({ onboardingStatus: "PENDING", currentState: "Closed-Won" }),
             apexoutbox_leads_onboarding_failed: await Lead.countDocuments({ onboardingStatus: "FAILED" }),
         }),

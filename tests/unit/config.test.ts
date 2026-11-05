@@ -16,6 +16,12 @@ describe("config", () => {
     expect(() => parseConfig({ ...base, NODE_ENV: "production", API_KEYS: "k".repeat(20) + ":ownerA" })).toThrow(/SMTP_HOST/);
     expect(parseConfig({ ...base, NODE_ENV: "production", API_KEYS: "k".repeat(20) + ":ownerA", SMTP_HOST: "h", SMTP_USER: "u", SMTP_PASS: "p" }).NODE_ENV).toBe("production");
   });
+  it("scraper may fetch the bundled demo pages on this machine, except in production", () => {
+    expect(parseConfig(base).scraperAllowLoopback).toBe(true);
+    expect(parseConfig({ ...base, NODE_ENV: "production", API_KEYS: "k".repeat(20) + ":o", SMTP_HOST: "h", SMTP_USER: "u", SMTP_PASS: "p" }).scraperAllowLoopback).toBe(false);
+    expect(parseConfig({ ...base, SCRAPER_ALLOW_LOOPBACK: "false" }).scraperAllowLoopback).toBe(false);
+    expect(() => parseConfig({ ...base, SCRAPER_ALLOW_LOOPBACK: "yes" })).toThrow(/SCRAPER_ALLOW_LOOPBACK/);
+  });
   it("parses API keys and rejects weak or malformed ones", () => {
     const key = "a".repeat(24);
     expect(parseApiKeys(`${key}:ownerA, ${"b".repeat(24)}:ownerB`).get(key)).toBe("ownerA");

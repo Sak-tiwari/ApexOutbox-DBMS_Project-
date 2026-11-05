@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { Lead } from "../models/Lead";
 import type { OnboardingStatus } from "../models/Lead";
-import type { LeadRecord, LeadStore, ListLeadsQuery, NewLead, TransitionWrite } from "./types";
+import type { LeadRecord, LeadStore, ListLeadsQuery, NewLead, ScrapedLead, TransitionWrite } from "./types";
 
 function toRecord(doc: any): LeadRecord {
   return {
@@ -23,6 +23,10 @@ function toRecord(doc: any): LeadRecord {
     onboardingStatus: doc.onboardingStatus ?? undefined,
     onboardingAttempts: doc.onboardingAttempts ?? 0,
     onboardingError: doc.onboardingError ?? "",
+    website: doc.website ?? undefined,
+    email: doc.email ?? undefined,
+    emails: doc.emails ?? [],
+    source: doc.source ?? undefined,
   };
 }
 
@@ -69,6 +73,28 @@ export class MongoLeadStore implements LeadStore {
   async create(l: NewLead) {
     const doc = await Lead.create({ name: l.name, company: l.company, ownerId: l.ownerId, ...(l.followUpDate ? { followUpDate: l.followUpDate } : {}) });
     return toRecord(doc.toObject());
+  }
+
+  async upsertScraped(l: ScrapedLead) {
+    const origin = new URL(l.website).origin;
+    const dedupeKey = `${l.ownerId}|${origin}|${l.email ?? "no-email"}`;
+    const existing = async () => Lead.findOneAndUpdate({ dedupeKey }, { $addToSet: { emails: { $each: l.emails } } }, { new: true, lean: true });
+    const found = await existing();
+    if (found) return { lead: toRecord(found), created: false };
+    try {
+      const doc = await Lead.create({
+        name: l.name, company: l.company, ownerId: l.ownerId, website: l.website, email: l.email,
+        emails: l.emails, source: l.source, dedupeKey,
+      });
+      return { lead: toRecord(doc.toObject()), created: true };
+    } catch (error) {
+      // Two scrapes of the same page raced: the unique index let one win, the other returns that lead.
+      if ((error as { code?: number }).code === 11000) {
+        const winner = await existing();
+        if (winner) return { lead: toRecord(winner), created: false };
+      }
+      throw error;
+    }
   }
 
   async cancelPendingOnboarding(id: string) {

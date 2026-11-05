@@ -17,7 +17,7 @@ if not exist ".env" (
   pause
   exit /b 1
 )
-if not exist "node_modules" (
+if not exist "node_modules\crawlee" (
   echo  First run: installing packages, this takes a minute...
   call npm ci
   if errorlevel 1 ( echo  npm ci failed. & pause & exit /b 1 )

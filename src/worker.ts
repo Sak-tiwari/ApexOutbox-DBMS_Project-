@@ -15,6 +15,9 @@ import { MongoInvoiceStore, MongoOutboxStore } from "./phase4/mongoStores";
 import { InvoiceNotFoundError, processInvoiceJob } from "./phase4/processor";
 import { QUEUE_NAME, createQueueClient } from "./phase4/queue";
 import { requeueStuckInvoices } from "./phase4/requeue";
+import { MongoScrapeJobStore } from "./scraper/jobs";
+import { processScrapeJob } from "./scraper/processor";
+import { scrapePage } from "./scraper/scrapePage";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -24,6 +27,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  *   2. outbox dispatcher  - publishes pending outbox events to the queue
  *   3. reconciler         - retries Closed-Won leads whose onboarding hand-off did not finish
  *   4. requeue sweep      - re-creates queue jobs for unsent invoices if Redis lost them
+ *   5. scraper loop       - takes queued website scrapes (Crawlee) and turns them into leads
  */
 async function main() {
   const config = parseConfig();
@@ -35,6 +39,7 @@ async function main() {
   const invoiceStore = new MongoInvoiceStore();
   const outboxStore = new MongoOutboxStore();
   const leads = new MongoLeadStore();
+  const scrapeJobs = new MongoScrapeJobStore();
 
   const worker = new Worker(
     QUEUE_NAME,
@@ -93,6 +98,34 @@ async function main() {
     }
   })();
 
+  // Website scraper: one page at a time (polite, and keeps memory use small).
+  const scrapeLoop = (async () => {
+    let lastSweep = 0;
+    while (!stopping) {
+      try {
+        if (Date.now() - lastSweep > 60_000) {
+          lastSweep = Date.now();
+          const revived = await scrapeJobs.recoverStale(5 * 60_000, 2);
+          if (revived) log.warn({ revived }, "re-queued scrape jobs left behind by a stopped worker");
+        }
+        const job = await scrapeJobs.claimNext();
+        if (!job) {
+          await sleep(1500);
+          continue;
+        }
+        await processScrapeJob(job, {
+          jobs: scrapeJobs,
+          leads,
+          scrape: (url) => scrapePage(url, { allowLoopback: config.scraperAllowLoopback }),
+          log,
+        });
+      } catch (error) {
+        log.error({ error: String(error) }, "scraper loop error");
+        await sleep(3000);
+      }
+    }
+  })();
+
   // Liveness signal for the container healthcheck: only refreshed while the loops are actually running
   // and MongoDB is connected, so a wedged or disconnected worker becomes "unhealthy".
   const HEARTBEAT = process.env.WORKER_HEARTBEAT_FILE || "/tmp/worker-heartbeat";
@@ -110,7 +143,7 @@ async function main() {
     stopping = true;
     clearInterval(heartbeat);
     await worker.close();
-    await Promise.race([Promise.all([dispatchLoop, reconcileLoop, requeueLoop]), sleep(5000)]);
+    await Promise.race([Promise.all([dispatchLoop, reconcileLoop, requeueLoop, scrapeLoop]), sleep(5000)]);
     await queue.close();
     workerConnection.disconnect();
     await mongoose.disconnect();
@@ -119,7 +152,7 @@ async function main() {
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-  log.info({}, "worker started (invoice jobs + outbox dispatcher + onboarding reconciler)");
+  log.info({}, "worker started (invoice jobs + outbox dispatcher + onboarding reconciler + website scraper)");
 }
 
 main().catch((error) => {

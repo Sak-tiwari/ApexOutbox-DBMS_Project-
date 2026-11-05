@@ -6,6 +6,18 @@ An automated business platform powered by Crawlee, Node.js, and TypeScript for w
 
 # Business Automation System — Phase 4
 
+## Lead scraper (Phase 2, now part of the app)
+Paste a business website into the dashboard's **Find leads** box (or `POST /api/scrape-jobs {"url": "..."}`).
+The API only queues the job; the worker loop picks it up, reads the page with Crawlee, collects the contact
+emails and creates one lead in **New** (one lead per website and contact, scraping again never duplicates).
+When you close that lead as Won, the client email is pre-filled from what the scraper found.
+
+- Polite: obeys `robots.txt`, identifies itself as `ApexOutboxBot`, one page at a time.
+- Safe: refuses localhost, private networks and cloud-metadata addresses, and re-checks every redirect.
+- Scope: it reads **one page per job** (the address you give). It is not a directory crawler.
+- Demo: three fake business pages and one page blocked by robots.txt live in `public/demo/` (buttons in the dashboard).
+  They are only reachable by the scraper when `SCRAPER_ALLOW_LOOPBACK` is on (default outside production).
+
 ## Overview
 Phase 4 automates client onboarding, invoice creation,
 PDF generation, and transactional email processing.

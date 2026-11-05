@@ -1,6 +1,6 @@
 import type { IActivityLog, IDeal, OnboardingStatus } from "../../src/models/Lead";
 import type { InvoiceRecord, InvoiceStore, OutboxRecord, OutboxStore } from "../../src/phase4/ports";
-import type { LeadRecord, LeadStore, ListLeadsQuery, NewLead, TransitionWrite } from "../../src/stores/types";
+import type { LeadRecord, LeadStore, ListLeadsQuery, NewLead, ScrapedLead, TransitionWrite } from "../../src/stores/types";
 
 /**
  * In-memory stores that obey the same atomicity rules as the Mongo stores
@@ -48,6 +48,17 @@ export class MemoryLeadStore implements LeadStore {
   }
   async create(l: NewLead) {
     return structuredClone(this.seed({ id: `N${String(++this.seq).padStart(4, "0")}`, name: l.name, company: l.company, ownerId: l.ownerId, followUpDate: l.followUpDate }));
+  }
+  async upsertScraped(l: ScrapedLead) {
+    const key = `${l.ownerId}|${new URL(l.website).origin}|${l.email ?? "no-email"}`;
+    const hit = [...this.leads.values()].find((x) => (x as LeadRecord & { dedupeKey?: string }).dedupeKey === key);
+    if (hit) {
+      hit.emails = [...new Set([...(hit.emails ?? []), ...l.emails])];
+      return { lead: structuredClone(hit), created: false };
+    }
+    const lead = this.seed({ id: `N${String(++this.seq).padStart(4, "0")}`, name: l.name, company: l.company, ownerId: l.ownerId, website: l.website, email: l.email, emails: l.emails, source: l.source });
+    (lead as LeadRecord & { dedupeKey?: string }).dedupeKey = key;
+    return { lead: structuredClone(lead), created: true };
   }
   async cancelPendingOnboarding(id: string) {
     const l = this.leads.get(id);
@@ -136,5 +147,38 @@ export class MemoryOutboxStore implements OutboxStore {
   async markPublished(id: string) { const e = this.events.get(id)!; e.status = "PUBLISHED"; e.lastError = ""; }
   async markRetry(id: string, error: string, nextAttemptAt: Date, final: boolean) {
     const e = this.events.get(id)!; e.status = final ? "FAILED" : "PENDING"; e.lastError = error; e.nextAttemptAt = nextAttemptAt; e.updatedAt = new Date();
+  }
+}
+
+import type { ScrapeJobRecord, ScrapeJobStore, ScrapeResultWrite } from "../../src/scraper/jobs";
+
+export class MemoryScrapeJobStore implements ScrapeJobStore {
+  jobs: ScrapeJobRecord[] = [];
+  private seq = 0;
+  async enqueue(ownerId: string, url: string) {
+    const active = this.jobs.find((j) => j.ownerId === ownerId && j.url === url && (j.status === "QUEUED" || j.status === "RUNNING"));
+    if (active) return { job: structuredClone(active), created: false };
+    const job: ScrapeJobRecord = { id: `J${String(++this.seq).padStart(4, "0")}`, ownerId, url, status: "QUEUED", attempts: 0, title: "", emails: [], errorCode: "", error: "", createdAt: new Date() };
+    this.jobs.push(job);
+    return { job: structuredClone(job), created: true };
+  }
+  async countActive(ownerId: string) { return this.jobs.filter((j) => j.ownerId === ownerId && (j.status === "QUEUED" || j.status === "RUNNING")).length; }
+  async list(ownerId: string, limit: number) { return this.jobs.filter((j) => j.ownerId === ownerId).slice().reverse().slice(0, limit).map((j) => structuredClone(j)); }
+  async findById(id: string) { const j = this.jobs.find((x) => x.id === id); return j ? structuredClone(j) : null; }
+  async claimNext() {
+    const j = this.jobs.find((x) => x.status === "QUEUED");
+    if (!j) return null;
+    j.status = "RUNNING"; j.attempts += 1; j.startedAt = new Date();
+    return structuredClone(j);
+  }
+  async complete(id: string, r: ScrapeResultWrite) { Object.assign(this.jobs.find((x) => x.id === id)!, { status: "DONE", ...r, finishedAt: new Date() }); }
+  async fail(id: string, errorCode: string, error: string) { Object.assign(this.jobs.find((x) => x.id === id)!, { status: "FAILED", errorCode, error, finishedAt: new Date() }); }
+  async recoverStale(olderThanMs: number, maxAttempts: number) {
+    let n = 0;
+    for (const j of this.jobs) {
+      if (j.status !== "RUNNING" || !j.startedAt || Date.now() - j.startedAt.getTime() < olderThanMs) continue;
+      if (j.attempts < maxAttempts) { j.status = "QUEUED"; n++; } else { j.status = "FAILED"; j.errorCode = "WORKER_LOST"; }
+    }
+    return n;
   }
 }

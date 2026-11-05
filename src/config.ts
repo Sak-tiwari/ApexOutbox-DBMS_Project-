@@ -20,6 +20,9 @@ const schema = z
     EMAIL_FROM: z.string().default("no-reply@example.com"),
     INVOICE_DIR: z.string().default("generated-invoices"),
     // Requests per minute per client IP on /api (0 disables). Per process; see src/middleware/rateLimit.ts.
+    // Lets the scraper fetch the bundled demo pages on this machine (http://127.0.0.1/demo/...). Only those
+    // pages; other local addresses stay blocked. On by default outside production.
+    SCRAPER_ALLOW_LOOPBACK: z.enum(["true", "false"]).optional(),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(0).default(300),
   })
   .superRefine((env, ctx) => {
@@ -35,7 +38,7 @@ const schema = z
     }
   });
 
-export type Config = z.infer<typeof schema>;
+export type Config = z.infer<typeof schema> & { scraperAllowLoopback: boolean };
 
 export function parseConfig(source: Record<string, string | undefined> = process.env): Config {
   const result = schema.safeParse(source);
@@ -43,7 +46,8 @@ export function parseConfig(source: Record<string, string | undefined> = process
     const lines = result.error.issues.map((i) => `  - ${i.path.join(".") || "(root)"}: ${i.message}`);
     throw new Error(`Invalid configuration:\n${lines.join("\n")}`);
   }
-  return result.data;
+  const d = result.data;
+  return { ...d, scraperAllowLoopback: d.SCRAPER_ALLOW_LOOPBACK ? d.SCRAPER_ALLOW_LOOPBACK === "true" : d.NODE_ENV !== "production" };
 }
 
 /** Parses "key:user,key2:user2" into a map. Keys shorter than 16 chars are rejected as guessable. */

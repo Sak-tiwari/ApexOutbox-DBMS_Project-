@@ -4,7 +4,7 @@
 | Process | Command | Role |
 |---|---|---|
 | API | `node dist/server.js` | REST API: leads, transitions, onboarding, `/health`, `/ready`, `/metrics` |
-| Worker | `node dist/worker.js` | invoice PDFs and email, outbox dispatcher, onboarding reconciler, stuck-invoice requeue sweep |
+| Worker | `node dist/worker.js` | invoice PDFs and email, outbox dispatcher, onboarding reconciler, stuck-invoice requeue sweep, website scraper loop |
 | MongoDB | | source of truth (no transactions needed, so no replica set is required) |
 | Redis | | job delivery only; can be rebuilt from MongoDB |
 
@@ -27,6 +27,7 @@ for that key to move it. Call the API with `Authorization: Bearer <key>` (or `x-
 | `MONGODB_URI`, `REDIS_URL` | yes | validated at start-up |
 | `API_KEYS` | production | `key:user,key2:user2`; keys at least 16 characters |
 | `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM` | production | without them the app **refuses to start** in production. Outside production it uses DEMO mode (nothing is sent) |
+| `SCRAPER_ALLOW_LOOPBACK` | optional | `true`/`false`. Lets the scraper read the bundled `/demo/` pages on this machine. Default: on outside production, off in production |
 | `INVOICE_DIR` | recommended | persistent volume in production. `docker-compose.yml` forces `/data/invoices` for the worker |
 | `RATE_LIMIT_PER_MINUTE` | no | per client IP on `/api`, default 300, `0` disables |
 | `NODE_ENV`, `PORT`, `LOG_LEVEL` | no | |
@@ -111,3 +112,11 @@ Then start the worker: in-flight onboarding and invoices are finished by the rec
 - Keys live only in environment variables; rotate by changing `API_KEYS` and restarting. Logs redact authorization headers and SMTP passwords.
 - Anyone with a key can read all leads; only the lead owner can move one (decision D-5).
 - Consider disabling `POST /api/phase4/onboard` in production (decision D-4).
+
+
+## Scraper operations
+
+- Jobs are in the `scrapejobs` collection: `QUEUED -> RUNNING -> DONE | FAILED`. The worker takes one job at a time. A job left `RUNNING` by a crashed worker is re-queued after 5 minutes (once), then failed with `WORKER_LOST`.
+- `/metrics` shows `apexoutbox_scrape_jobs_queued` and `apexoutbox_scrape_jobs_failed`. A growing queued count with a healthy API means the worker is not running.
+- Common `errorCode`s on a failed job: `ROBOTS` (site forbids robots), `UNSAFE_URL` (private address or unsafe redirect), `HTTP_ERROR`, `NOT_HTML`, `TOO_MANY_REDIRECTS`, `FAILED` (could not load).
+- Each user may have 10 waiting scrapes. Repeating a scrape of a site never creates a second lead.
