@@ -11,6 +11,8 @@ import { createQueueClient } from "./phase4/queue";
 import { Invoice } from "./phase4/models";
 import { OutboxEvent } from "./phase4/outbox";
 import { Lead } from "./models/Lead";
+import path from "node:path";
+import { MongoInvoiceReader } from "./phase4/mongoStores";
 
 async function startServer() {
     const config = parseConfig();
@@ -30,6 +32,11 @@ async function startServer() {
         log,
         metrics: new Metrics(),
         rateLimitPerMinute: config.RATE_LIMIT_PER_MINUTE,
+        invoices: new MongoInvoiceReader(),
+        invoiceDir: config.INVOICE_DIR,
+        emailMode: config.SMTP_HOST ? "smtp" : "demo",
+        // src/ (tsx) and dist/ (build) are both one level below the project root.
+        publicDir: path.resolve(__dirname, "..", "public"),
         checks: {
             mongo: () => mongoose.connection.readyState === 1,
             redis: async () => (await queue.connection.ping()) === "PONG",

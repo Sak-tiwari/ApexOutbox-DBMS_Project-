@@ -86,6 +86,19 @@ npm run dev                 # API
 npm run dev:worker          # worker (invoices, outbox dispatcher, reconciler, requeue sweep)
 ```
 
+## Open the app (Windows, one click)
+The app has a browser dashboard (board, new lead, deal form, invoices with PDF download), served by the API itself.
+
+1. One-time setup: `npm ci`, then create `.env` (see Quick start; keep it named exactly `.env`).
+2. Double-click **`start-apexoutbox.bat`**. It starts the API and the worker in two minimised windows, waits until MongoDB and Redis are reachable, and opens `http://localhost:3000`.
+3. Paste your API key (the part before the colon in `API_KEYS`) on the first screen. The browser remembers it.
+4. To stop everything, double-click **`stop-apexoutbox.bat`**.
+
+Desktop shortcut with a hotkey: right-click `start-apexoutbox.bat`, **Send to > Desktop (create shortcut)**, then right-click the shortcut, **Properties**, click in **Shortcut key** and press for example `Ctrl+Alt+A`.
+
+The page: drag a card to the next column (or use the arrow buttons). Moving to **Closed-Won** asks for the deal (email, amount) and then creates the client, the invoice and the PDF and sends the email; the invoice table shows each step live. With no `SMTP_*` settings the email step is a **demo** (the page says so); nothing is really sent.
+`node scripts/ui-check.js` runs a 24-step browser test of the page against a running stack (see the file header).
+
 ## How the phases connect
 1. `POST /api/leads/:id/transition` with `targetState: "Closed-Won"` **requires a `deal`**
    (`email`, `amount`, `currency`, `description`). It is saved in the same single-document update as the state change.
@@ -102,6 +115,8 @@ All API routes now need `Authorization: Bearer <key>` (keys from `API_KEYS`).
 | `GET /api/leads` | list; `state`, `ownerId`, `followUpBefore/After`, `limit` (1-100, default 25), `cursor` -> `nextCursor` |
 | `GET /api/leads/:id` | one lead with its history |
 | `POST /api/leads/:id/transition` | `{targetState, version, reason?, deal?}` (`version` may be a number or digit string) |
+| `GET /api/invoices?leadId=&limit=` | invoices (newest first) with status; `GET /api/invoices/:id/pdf` streams the PDF |
+| `GET /api/meta` | the allowed pipeline moves and whether email is `smtp` or `demo` |
 | `GET /health`, `GET /ready`, `GET /metrics` | liveness, readiness (Mongo + Redis), metrics (key required) |
 
 `RATE_LIMIT_PER_MINUTE` (default 300 per client IP) limits `/api`. `npm run ci` = typecheck + full tests with skips as errors + build.

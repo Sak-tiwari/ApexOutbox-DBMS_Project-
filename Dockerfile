@@ -14,6 +14,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+COPY public ./public
 COPY scripts ./scripts
 COPY THIRD_PARTY_NOTICES.md ./
 RUN mkdir -p /data/invoices && chown -R node:node /data /app

@@ -5,11 +5,12 @@
 | Check | Result |
 |---|---|
 | `npm run typecheck` (app + tests) | clean |
-| `npm test` (vitest) | **121 passed, 0 failed, 2 skipped** (123 tests, 11 files) |
+| `npm test` (vitest) | **128 passed, 0 failed, 2 skipped** (130 tests, 11 files) |
 | `npm run test:legacy` (the Phase 3 team's own script) | 4/4 pass, exit 0 |
 | `npm audit` (all dependencies) | 0 vulnerabilities |
 | Licence scan, 134 production packages | no GPL/AGPL/LGPL/SSPL; `THIRD_PARTY_NOTICES.md` generated |
 | Real-process smoke test (`scripts/smoke.js` against built `dist` API + worker) | **19/19 checks** |
+| Browser test of the dashboard (`scripts/ui-check.js`, headless Chromium, real API + worker + Redis, FerretDB) | **24/24 checks**: key gate, XSS probe, buttons and drag-and-drop, illegal move refused, Closed-Won to PDF, reopen with reason, search, mobile width, no console errors |
 
 ## Test files
 
@@ -23,7 +24,7 @@
 | `tests/unit/requeue.test.ts` | 3 | which invoices are re-queued (now including stale `EMAIL_SENDING`, never abandoned/sent) |
 | `tests/unit/invoice-pdf.test.ts` | 3 | PDF finishes and is valid (regression for the hang), path safety |
 | `tests/unit/config.test.ts` | 4 | production requires keys and SMTP; weak API keys rejected |
-| `tests/http/api.test.ts` | 31 | (adds: create lead, paging, numeric-string version, reopen cancels onboarding, rate limit) |
+| `tests/http/api.test.ts` | 38 | (adds: create lead, paging, numeric-string version, reopen cancels onboarding, rate limit) |
 | (original scope) | |  auth (401, spoofed header ignored), every error code, Closed-Won over HTTP, no leakage in 500s, health/ready/metrics |
 | `tests/integration/queue.test.ts` | 7 | **real Redis + BullMQ**: duplicate jobs, outage and recovery, baseline hang, requeue of lost/failed jobs |
 | `tests/integration/mongo.test.ts` | 19 (+2 skipped) | **database**: unique constraints, 20 concurrent onboardings, stale-version refusal, full end-to-end with replays, reconciler, crashed dispatcher, uncertain email, HTTP on real data |
@@ -65,6 +66,10 @@
    store-level test for it).
 3. The Docker image and compose file were not built or run here.
 4. Email "sent" in the smoke test means **demo mode**: no real mail left the machine.
+
+## Not verified for the dashboard launcher
+
+`start-apexoutbox.bat`, `stop-apexoutbox.bat` and `scripts/windows/*.ps1` were written but **not run** (no Windows or PowerShell in my environment). The page, the API and the compiled build were tested on Linux. Test the launcher once on the presentation PC.
 
 ## Skips are errors in CI
 

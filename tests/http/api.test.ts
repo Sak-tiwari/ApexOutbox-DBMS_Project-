@@ -265,3 +265,87 @@ describe("rate limiting", () => {
     expect((await request(app).get("/health")).status).toBe(200);
   });
 });
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { InvoiceReader, InvoiceView } from "../../src/routes/invoiceRoutes";
+
+describe("invoices API, meta and the browser page", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-inv-"));
+  fs.writeFileSync(path.join(dir, "INV-1.pdf"), "%PDF-1.4 test");
+  const outside = path.join(os.tmpdir(), "apex-outside.pdf");
+  fs.writeFileSync(outside, "%PDF-1.4 secret");
+  const views: InvoiceView[] = [
+    { id: "i1", invoiceNumber: "INV-1", leadId: "L1", status: "EMAIL_SENT", clientName: "A", email: "a@example.com", company: "C", amount: 10, currency: "INR", description: "d", emailAttempts: 1, lastError: "", hasPdf: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" },
+    { id: "i2", invoiceNumber: "INV-2", leadId: "L2", status: "PENDING", clientName: "B", email: "b@example.com", company: "", amount: 5, currency: "INR", description: "d", emailAttempts: 0, lastError: "", hasPdf: false, createdAt: "2026-01-02T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z" },
+  ];
+  const paths: Record<string, { path: string; invoiceNumber: string }> = {
+    i1: { path: path.join(dir, "INV-1.pdf"), invoiceNumber: "INV-1" },
+    evil: { path: outside, invoiceNumber: "INV-9" },
+    badname: { path: path.join(dir, "INV-1.pdf"), invoiceNumber: '../x"' },
+    gone: { path: path.join(dir, "missing.pdf"), invoiceNumber: "INV-3" },
+  };
+  const reader: InvoiceReader = {
+    list: async ({ leadId, limit }) => views.filter((v) => !leadId || v.leadId === leadId).slice(0, limit),
+    pdfPath: async (id) => paths[id] ?? null,
+  };
+  const make = (extra: object = {}) => {
+    const leads = new MemoryLeadStore();
+    return createApp({ leads, transitions: new TransitionService(leads), onboard: async () => ({} as any), log: silentLog, metrics: new Metrics(), apiKeys: new Map([[KEY_A, "ownerA"]]), checks: { mongo: () => true, redis: () => true }, invoices: reader, invoiceDir: dir, ...extra });
+  };
+
+  it("requires a key for the list and the PDF", async () => {
+    const app = make();
+    expect((await request(app).get("/api/invoices")).status).toBe(401);
+    expect((await request(app).get("/api/invoices/i1/pdf")).status).toBe(401);
+  });
+
+  it("lists invoices, filters by lead, validates limit, and never exposes file paths", async () => {
+    const app = make();
+    const all = await request(app).get("/api/invoices").set(authA);
+    expect(all.body.count).toBe(2);
+    expect(JSON.stringify(all.body)).not.toMatch(/pdfPath|apex-inv/);
+    expect((await request(app).get("/api/invoices?leadId=L2").set(authA)).body.data.map((v: any) => v.id)).toEqual(["i2"]);
+    for (const q of ["limit=0", "limit=101", "limit=abc"]) expect((await request(app).get(`/api/invoices?${q}`).set(authA)).status).toBe(400);
+  });
+
+  it("streams a real PDF inline", async () => {
+    const res = await request(make()).get("/api/invoices/i1/pdf").set(authA);
+    expect(res.status).toBe(200);
+    expect(res.headers["content-type"]).toContain("application/pdf");
+    expect(res.headers["content-disposition"]).toContain('inline; filename="INV-1.pdf"');
+    expect(res.body.toString().startsWith("%PDF-")).toBe(true);
+  });
+
+  it("404s for unknown, not-yet-created, outside-folder, unsafe-name and missing-file PDFs", async () => {
+    const app = make();
+    for (const id of ["nope", "i2", "evil", "badname", "gone"]) expect((await request(app).get(`/api/invoices/${id}/pdf`).set(authA)).status).toBe(404);
+  });
+
+  it("GET /api/meta returns the transition table and the email mode", async () => {
+    const res = await request(make({ emailMode: "smtp" })).get("/api/meta").set(authA);
+    expect(res.body.data.transitions["Negotiation"]).toContain("Closed-Won");
+    expect(res.body.data.emailMode).toBe("smtp");
+    expect((await request(make()).get("/api/meta").set(authA)).body.data.emailMode).toBe("demo");
+    expect((await request(make()).get("/api/meta")).status).toBe(401);
+  });
+
+  it("serves the page at / without a key, with a content-security-policy; API stays protected", async () => {
+    const pub = fs.mkdtempSync(path.join(os.tmpdir(), "apex-pub-"));
+    fs.writeFileSync(path.join(pub, "index.html"), "<!doctype html><title>x</title>");
+    const app = make({ publicDir: pub });
+    const res = await request(app).get("/");
+    expect(res.status).toBe(200);
+    expect(res.headers["content-security-policy"]).toContain("default-src 'self'");
+    expect(res.headers["x-content-type-options"]).toBe("nosniff");
+    expect((await request(app).get("/api/leads")).status).toBe(401);
+    expect((await request(make()).get("/")).body.message).toContain("running"); // no publicDir: JSON hello
+  });
+
+  it("the real public/index.html exists and escapes user text (no raw innerHTML of lead names)", () => {
+    const html = fs.readFileSync(path.join(__dirname, "..", "..", "public", "index.html"), "utf8");
+    expect(html).toContain("function esc(");
+    expect(html).not.toMatch(/innerHTML\s*=\s*[^;]*l\.name(?![^;]*esc\()/);
+  });
+});

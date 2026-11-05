@@ -103,3 +103,36 @@ export class MongoOutboxStore implements OutboxStore {
     );
   }
 }
+
+import type { InvoiceReader, InvoiceView } from "../routes/invoiceRoutes";
+
+/** Read-only view of invoices for the UI. */
+export class MongoInvoiceReader implements InvoiceReader {
+  async list({ leadId, limit }: { leadId?: string; limit: number }): Promise<InvoiceView[]> {
+    const filter = leadId ? { idempotencyKey: `lead:${leadId}:initial-invoice` } : {};
+    const docs = await Invoice.find(filter).sort({ _id: -1 }).limit(limit).lean();
+    return docs.map((d: any) => ({
+      id: String(d._id),
+      invoiceNumber: d.invoiceNumber,
+      leadId: /^lead:(.+):initial-invoice$/.exec(d.idempotencyKey)?.[1] ?? null,
+      status: d.status,
+      clientName: d.snapshot?.clientName ?? "",
+      email: d.snapshot?.email ?? "",
+      company: d.snapshot?.company ?? "",
+      amount: d.snapshot?.amount ?? 0,
+      currency: d.snapshot?.currency ?? "INR",
+      description: d.snapshot?.description ?? "",
+      emailAttempts: d.emailAttempts ?? 0,
+      lastError: d.lastError ?? "",
+      hasPdf: !!d.pdfPath,
+      createdAt: new Date(d.createdAt).toISOString(),
+      updatedAt: new Date(d.updatedAt).toISOString(),
+    }));
+  }
+
+  async pdfPath(id: string) {
+    if (!mongoose.isValidObjectId(id)) return null;
+    const d: any = await Invoice.findById(id).select("pdfPath invoiceNumber").lean();
+    return d?.pdfPath ? { path: d.pdfPath as string, invoiceNumber: d.invoiceNumber as string } : null;
+  }
+}
