@@ -143,16 +143,19 @@ const check = (name, ok, extra = "") => { results.push(ok); console.log(`${ok ? 
   const before = await page.locator(".card").count();
   await page.click('[data-demo="bakery"]');
   await page.waitForFunction(() => /Done/.test(document.getElementById("jobs").textContent), null, { timeout: 30000 });
-  check("demo page scraped by the worker: job shows Done with the emails found", /orders@bloombakery\.test/.test(await page.textContent("#jobs")) && /press@bloombakery\.test/.test(await page.textContent("#jobs")));
+  check("demo page scraped by the worker: job shows Done with the emails found", /orders@bloombakery\.test/.test(await page.textContent("#jobs")) && /press@bloombakery\.test/.test(await page.textContent("#jobs")) && /\+919876543210/.test(await page.textContent("#jobs")));
   await page.waitForFunction((n) => document.querySelectorAll(".card").length === n + 1, before);
   const scraped = page.locator('.col[data-state="New"] .card', { hasText: "Bloom Bakery" });
-  check("scraped lead appears in New with the Scraped chip, website and email", (await scraped.count()) === 1 && /Scraped/.test(await scraped.textContent()) && /orders@bloombakery\.test/.test(await scraped.textContent()));
+  check("scraped lead appears in New with the Scraped chip, website and email", (await scraped.count()) === 1 && /Scraped/.test(await scraped.textContent()) && /orders@bloombakery\.test/.test(await scraped.textContent()) && /\+919876543210/.test(await scraped.textContent()));
   await page.screenshot({ path: `${SHOTS}/6-scraper.png`, fullPage: true });
 
   await page.click('[data-demo="bakery"]');
   await page.waitForFunction(() => /Already in your pipeline/.test(document.getElementById("toasts").textContent), null, { timeout: 30000 });
   check("scraping the same page again does not create a duplicate lead", (await page.locator(".card").count()) === before + 1);
 
+  await page.click('[data-demo="dental"]');
+  await page.waitForFunction(() => /2 pages read/.test(document.getElementById("jobs").textContent), null, { timeout: 30000 });
+  check("contact details on the Contact page are found too (2 pages read: email + phone)", /info@brightsmile\.test/.test(await page.textContent("#jobs")) && /\+912212345678/.test(await page.textContent("#jobs")));
   await page.click('[data-demo="private"]');
   await page.waitForFunction(() => /robots\.txt/.test(document.getElementById("jobs").textContent), null, { timeout: 30000 });
   check("a page blocked by robots.txt is refused with a clear reason", /Failed/.test(await page.textContent("#jobs")));

@@ -52,7 +52,7 @@ Reviewed: `main` at commit `4ca5d79` (Phase 3 + Phase 4 code). "Verified" means 
 
 ## C. Not done / limits
 
-- **Scraper limits.** One page per job, plain HTML only (no JavaScript rendering), and the address safety check happens just before the fetch, so a hostile DNS server that changes its answer in between is not covered. Use an egress firewall if scraping untrusted addresses in production.
+- **Scraper limits.** It reads the given page plus up to two same-site Contact/About pages, plain HTML only; it does not discover businesses by itself (you supply the website) (no JavaScript rendering), and the address safety check happens just before the fetch, so a hostile DNS server that changes its answer in between is not covered. Use an egress firewall if scraping untrusted addresses in production.
 - **Rate limiting is per process and per IP.** Behind several replicas or a proxy, use a gateway limiter for a hard limit and configure `trust proxy`.
 - **Money is still stored as floating point** in the invoice snapshot (now validated to 2 decimals). Integer paise would be safer.
 - **Secrets** come from environment variables only; use your platform's secret store. No key-rotation tooling.

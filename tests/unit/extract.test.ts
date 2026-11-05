@@ -22,11 +22,21 @@ describe("email extraction", () => {
     expect(extractFromHtml(html).emails).toEqual(["real@firm.test"]);
   });
   it("copes with empty, huge and malformed input", () => {
-    expect(extractFromHtml("")).toEqual({ title: "", emails: [] });
+    expect(extractFromHtml("")).toEqual({ title: "", emails: [], phones: [], contactLinks: [] });
     expect(extractFromHtml('<a href="mailto:%E0%A4%A">bad</a>').emails).toEqual([]);
     const many = Array.from({ length: 100 }, (_, i) => `u${i}@many.test`).join(" ");
     expect(extractFromHtml(many).emails).toHaveLength(20);
     expect(extractFromHtml("x".repeat(3_000_000) + " late@after.test").emails).toEqual([]);
+  });
+  it("finds phone numbers from tel: links and labelled text, not from prices or years", () => {
+    const html = '<a href="tel:+91 98765-43210">call</a><p>Phone: 022 2345 6789</p><p>Open since 2015. Cakes from 1500 rupees. Call us on 98765 12345!</p><p>Ref 1234567890123456</p>';
+    expect(extractFromHtml(html).phones).toEqual(["+919876543210", "02223456789", "9876512345"]);
+    expect(extractFromHtml("<p>Price 1999 in 2024, 100% fresh</p>").phones).toEqual([]);
+  });
+  it("lists same-site Contact/About links only, at most two", () => {
+    const html = '<a href="/contact">Contact</a><a href="/about-us">About</a><a href="/careers/contact-hr">x</a><a href="https://other.test/contact">Contact</a><a href="mailto:a@b.test">contact</a><a href="/products">Products</a>';
+    expect(extractFromHtml(html, "https://shop.test/").contactLinks).toEqual(["https://shop.test/contact", "https://shop.test/about-us"]);
+    expect(extractFromHtml(html).contactLinks).toEqual([]);
   });
   it("prefers a person's address over info@ and noreply@", () => {
     expect(primaryEmail(["noreply@a.test", "info@a.test", "ravi@a.test"])).toBe("ravi@a.test");

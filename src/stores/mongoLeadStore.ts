@@ -26,6 +26,8 @@ function toRecord(doc: any): LeadRecord {
     website: doc.website ?? undefined,
     email: doc.email ?? undefined,
     emails: doc.emails ?? [],
+    phone: doc.phone ?? undefined,
+    phones: doc.phones ?? [],
     source: doc.source ?? undefined,
   };
 }
@@ -78,13 +80,13 @@ export class MongoLeadStore implements LeadStore {
   async upsertScraped(l: ScrapedLead) {
     const origin = new URL(l.website).origin;
     const dedupeKey = `${l.ownerId}|${origin}|${l.email ?? "no-email"}`;
-    const existing = async () => Lead.findOneAndUpdate({ dedupeKey }, { $addToSet: { emails: { $each: l.emails } } }, { new: true, lean: true });
+    const existing = async () => Lead.findOneAndUpdate({ dedupeKey }, { $addToSet: { emails: { $each: l.emails }, phones: { $each: l.phones } } }, { new: true, lean: true });
     const found = await existing();
     if (found) return { lead: toRecord(found), created: false };
     try {
       const doc = await Lead.create({
         name: l.name, company: l.company, ownerId: l.ownerId, website: l.website, email: l.email,
-        emails: l.emails, source: l.source, dedupeKey,
+        emails: l.emails, phone: l.phones[0], phones: l.phones, source: l.source, dedupeKey,
       });
       return { lead: toRecord(doc.toObject()), created: true };
     } catch (error) {

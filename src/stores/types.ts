@@ -17,6 +17,8 @@ export interface LeadRecord {
   website?: string;
   email?: string;
   emails?: string[];
+  phone?: string;
+  phones?: string[];
   source?: string;
 }
 
@@ -44,6 +46,7 @@ export interface ScrapedLead {
   website: string;
   email?: string;
   emails: string[];
+  phones: string[];
   source: string;
 }
 

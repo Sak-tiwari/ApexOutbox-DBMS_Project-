@@ -34,9 +34,10 @@ export async function processScrapeJob(job: ScrapeJobRecord, deps: ScrapeProcess
       website: outcome.finalUrl,
       email,
       emails: outcome.emails,
+      phones: outcome.phones,
       source: "Website scraper",
     });
-    await deps.jobs.complete(job.id, { title: outcome.title, emails: outcome.emails, leadId: lead.id, leadCreated: created });
+    await deps.jobs.complete(job.id, { title: outcome.title, emails: outcome.emails, phones: outcome.phones, pagesRead: outcome.pagesRead, leadId: lead.id, leadCreated: created });
     deps.log.info({ jobId: job.id, leadId: lead.id, created, emails: outcome.emails.length }, "scrape finished");
   } catch (error) {
     deps.log.error({ jobId: job.id, error: String(error) }, "scrape job crashed");

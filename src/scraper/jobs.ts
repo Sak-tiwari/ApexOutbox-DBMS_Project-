@@ -10,6 +10,8 @@ export interface ScrapeJobRecord {
   attempts: number;
   title: string;
   emails: string[];
+  phones: string[];
+  pagesRead?: number;
   leadId?: string;
   leadCreated?: boolean;
   errorCode: string;
@@ -22,6 +24,8 @@ export interface ScrapeJobRecord {
 export interface ScrapeResultWrite {
   title: string;
   emails: string[];
+  phones: string[];
+  pagesRead: number;
   leadId: string;
   leadCreated: boolean;
 }
@@ -48,6 +52,8 @@ interface ScrapeJobDoc {
   attempts: number;
   title: string;
   emails: string[];
+  phones: string[];
+  pagesRead?: number;
   leadId?: string;
   leadCreated?: boolean;
   errorCode: string;
@@ -63,6 +69,8 @@ const ScrapeJobSchema = new Schema<ScrapeJobDoc>({
   attempts: { type: Number, default: 0 },
   title: { type: String, default: "" },
   emails: { type: [String], default: [] },
+  phones: { type: [String], default: [] },
+  pagesRead: { type: Number },
   leadId: { type: String },
   leadCreated: { type: Boolean },
   errorCode: { type: String, default: "" },
@@ -78,7 +86,7 @@ export const ScrapeJob = mongoose.models.ScrapeJob ?? model<ScrapeJobDoc>("Scrap
 function toRecord(d: any): ScrapeJobRecord {
   return {
     id: String(d._id), ownerId: d.ownerId, url: d.url, status: d.status, attempts: d.attempts ?? 0,
-    title: d.title ?? "", emails: d.emails ?? [], leadId: d.leadId ?? undefined, leadCreated: d.leadCreated ?? undefined,
+    title: d.title ?? "", emails: d.emails ?? [], phones: d.phones ?? [], pagesRead: d.pagesRead ?? undefined, leadId: d.leadId ?? undefined, leadCreated: d.leadCreated ?? undefined,
     errorCode: d.errorCode ?? "", error: d.error ?? "", createdAt: d.createdAt, startedAt: d.startedAt ?? undefined, finishedAt: d.finishedAt ?? undefined,
   };
 }
@@ -111,7 +119,7 @@ export class MongoScrapeJobStore implements ScrapeJobStore {
     return d ? toRecord(d) : null;
   }
   async complete(id: string, r: ScrapeResultWrite) {
-    await ScrapeJob.updateOne({ _id: id }, { $set: { status: "DONE", title: r.title, emails: r.emails, leadId: r.leadId, leadCreated: r.leadCreated, errorCode: "", error: "", finishedAt: new Date() } });
+    await ScrapeJob.updateOne({ _id: id }, { $set: { status: "DONE", title: r.title, emails: r.emails, phones: r.phones, pagesRead: r.pagesRead, leadId: r.leadId, leadCreated: r.leadCreated, errorCode: "", error: "", finishedAt: new Date() } });
   }
   async fail(id: string, errorCode: string, error: string) {
     await ScrapeJob.updateOne({ _id: id }, { $set: { status: "FAILED", errorCode, error: error.slice(0, 500), finishedAt: new Date() } });

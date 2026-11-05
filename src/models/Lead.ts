@@ -36,6 +36,8 @@ export interface ILead extends Document {
     website?: string;
     email?: string;
     emails?: string[];
+    phone?: string;
+    phones?: string[];
     source?: string;
     /** ownerId|origin|email - one lead per website and contact, enforced by a unique index. */
     dedupeKey?: string;
@@ -76,6 +78,8 @@ const LeadSchema = new Schema<ILead>({
     website: { type: String, trim: true, maxlength: 2000 },
     email: { type: String, lowercase: true, trim: true },
     emails: { type: [String], default: undefined },
+    phone: { type: String, trim: true, maxlength: 30 },
+    phones: { type: [String], default: undefined },
     source: { type: String, trim: true, maxlength: 100 },
     dedupeKey: { type: String }
 }, {

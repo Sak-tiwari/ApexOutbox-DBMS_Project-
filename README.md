@@ -14,7 +14,7 @@ When you close that lead as Won, the client email is pre-filled from what the sc
 
 - Polite: obeys `robots.txt`, identifies itself as `ApexOutboxBot`, one page at a time.
 - Safe: refuses localhost, private networks and cloud-metadata addresses, and re-checks every redirect.
-- Scope: it reads **one page per job** (the address you give). It is not a directory crawler.
+- Scope: it reads the address you give **plus up to two Contact/About pages of the same website**, and collects emails and phone numbers (tel: links and numbers labelled Phone/Call/Mobile). It is not a directory crawler and it does not search for businesses by itself: you give it the website.
 - Demo: three fake business pages and one page blocked by robots.txt live in `public/demo/` (buttons in the dashboard).
   They are only reachable by the scraper when `SCRAPER_ALLOW_LOOPBACK` is on (default outside production).
 

@@ -11,7 +11,7 @@ async function run(outcome: ScrapeOutcome | Error, store = new MemoryScrapeJobSt
   await processScrapeJob(claimed, { jobs: store, leads, log: silentLog, scrape: async () => { if (outcome instanceof Error) throw outcome; return outcome; } });
   return { store, leads, job: (await store.findById(job.id))! };
 }
-const good: ScrapeOutcome = { ok: true, finalUrl: "https://www.bloom.test/", title: "Bloom Bakery", emails: ["info@bloom.test", "owner@bloom.test"] };
+const good: ScrapeOutcome = { ok: true, finalUrl: "https://www.bloom.test/", title: "Bloom Bakery", emails: ["info@bloom.test", "owner@bloom.test"], phones: ["+919876543210"], pagesRead: 2 };
 
 describe("scrape job processor", () => {
   it("creates one New lead with the best email and marks the job DONE", async () => {
@@ -21,6 +21,8 @@ describe("scrape job processor", () => {
     const lead = leads.leads.get(job.leadId!)!;
     expect(lead).toMatchObject({ name: "Bloom Bakery", company: "bloom.test", currentState: "New", ownerId: "ownerA", email: "owner@bloom.test", website: "https://www.bloom.test/", source: "Website scraper" });
     expect(lead.emails).toEqual(["info@bloom.test", "owner@bloom.test"]);
+    expect(lead).toMatchObject({ phone: "+919876543210", phones: ["+919876543210"] });
+    expect(job).toMatchObject({ phones: ["+919876543210"], pagesRead: 2 });
   });
   it("scraping the same site twice does not create a second lead", async () => {
     const leads = new MemoryLeadStore();
@@ -31,7 +33,7 @@ describe("scrape job processor", () => {
     expect(leads.leads.size).toBe(1);
   });
   it("a page with no email still becomes a lead (found by name)", async () => {
-    const { leads, job } = await run({ ok: true, finalUrl: "https://quiet.test/", title: "", emails: [] });
+    const { leads, job } = await run({ ok: true, finalUrl: "https://quiet.test/", title: "", emails: [], phones: [], pagesRead: 1 });
     expect(job.status).toBe("DONE");
     expect(leads.leads.get(job.leadId!)).toMatchObject({ name: "quiet.test", email: undefined });
   });

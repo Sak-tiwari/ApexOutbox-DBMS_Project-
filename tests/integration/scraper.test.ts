@@ -17,7 +17,9 @@ const realMongo = engine === "mongodb";
 
 const PAGES: Record<string, { status?: number; type?: string; body?: string; location?: string; length?: number }> = {
   "/robots.txt": { type: "text/plain", body: "User-agent: *\nDisallow: /demo/private\n" },
-  "/demo/shop": { type: "text/html; charset=utf-8", body: '<html><head><title>Bloom Bakery | Home</title></head><body><a href="mailto:Owner@bloom.test">Mail</a> info@bloom.test</body></html>' },
+  "/demo/shop": { type: "text/html; charset=utf-8", body: '<html><head><title>Bloom Bakery | Home</title></head><body><a href="mailto:Owner@bloom.test">Mail</a> info@bloom.test <a href="tel:+91 98765 43210">call</a></body></html>' },
+  "/demo/home": { type: "text/html", body: '<title>Dental</title><a href="/demo/reach-us">Contact us</a><a href="/demo/dead-contact">Contact (broken)</a>' },
+  "/demo/reach-us": { type: "text/html", body: "<title>Contact</title>Write to hello@dental.test. Phone: 022 2345 6789" },
   "/demo/quiet": { type: "text/html", body: "<html><title>Quiet Studio</title><body>No contact details here.</body></html>" },
   "/demo/private": { type: "text/html", body: "<title>x</title> secret@bloom.test" },
   "/demo/go": { status: 302, location: "/demo/shop" },
@@ -49,7 +51,11 @@ afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
 describe("scrapePage with real Crawlee against a local server", () => {
   it("reads the title and every contact email", async () => {
     const r = await scrapePage(`${base}/demo/shop`, safe);
-    expect(r).toMatchObject({ ok: true, title: "Bloom Bakery | Home", emails: ["owner@bloom.test", "info@bloom.test"] });
+    expect(r).toMatchObject({ ok: true, title: "Bloom Bakery | Home", emails: ["owner@bloom.test", "info@bloom.test"], phones: ["+919876543210"], pagesRead: 1 });
+  });
+  it("follows the Contact page of the same site and merges its details; a broken contact link does not fail the job", async () => {
+    const r = await scrapePage(`${base}/demo/home`, safe);
+    expect(r).toMatchObject({ ok: true, title: "Dental", emails: ["hello@dental.test"], phones: ["02223456789"], pagesRead: 2 });
   });
   it("returns an empty email list (not an error) for a page with no contacts", async () => {
     expect(await scrapePage(`${base}/demo/quiet`, safe)).toMatchObject({ ok: true, title: "Quiet Studio", emails: [] });
@@ -101,9 +107,9 @@ describe.skipIf(engine === "none")("scrape jobs on MongoDB", () => {
     await processScrapeJob(claimed, { jobs, leads, log: silentLog, scrape: (u) => scrapePage(u, safe) });
 
     const done = (await jobs.findById(job.id))!;
-    expect(done).toMatchObject({ status: "DONE", leadCreated: true, title: "Bloom Bakery | Home", emails: ["owner@bloom.test", "info@bloom.test"] });
+    expect(done).toMatchObject({ status: "DONE", leadCreated: true, title: "Bloom Bakery | Home", emails: ["owner@bloom.test", "info@bloom.test"], phones: ["+919876543210"] });
     const lead = (await leads.findById(done.leadId!))!;
-    expect(lead).toMatchObject({ name: "Bloom Bakery | Home", company: "127.0.0.1", currentState: "New", ownerId: "ownerA", email: "owner@bloom.test", source: "Website scraper", version: 0 });
+    expect(lead).toMatchObject({ name: "Bloom Bakery | Home", company: "127.0.0.1", currentState: "New", ownerId: "ownerA", email: "owner@bloom.test", phone: "+919876543210", source: "Website scraper", version: 0 });
     expect(lead.emails).toEqual(["owner@bloom.test", "info@bloom.test"]);
   });
 
@@ -155,7 +161,7 @@ describe.skipIf(engine === "none")("scrape jobs on MongoDB", () => {
     const claims = (await Promise.all(Array.from({ length: 10 }, () => jobs.claimNext()))).filter(Boolean);
     expect(new Set(claims.map((c) => c!.id)).size).toBe(claims.length);
     expect(claims).toHaveLength(5);
-    const input = { ownerId: "ownerE", name: "Race", company: "race.test", website: "https://race.test/", email: "a@race.test", emails: ["a@race.test"], source: "Website scraper" };
+    const input = { ownerId: "ownerE", name: "Race", company: "race.test", website: "https://race.test/", email: "a@race.test", emails: ["a@race.test"], phones: [], source: "Website scraper" };
     const results = await Promise.all(Array.from({ length: 8 }, () => leads.upsertScraped(input)));
     expect(results.filter((r) => r.created)).toHaveLength(1);
     expect(await Lead.countDocuments({ ownerId: "ownerE" })).toBe(1);

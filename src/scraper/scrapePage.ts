@@ -11,7 +11,7 @@ const MAX_BODY_BYTES = 3_000_000;
 crawleeLog.setLevel(crawleeLog.LEVELS.OFF);
 
 export type ScrapeOutcome =
-  | { ok: true; finalUrl: string; title: string; emails: string[] }
+  | { ok: true; finalUrl: string; title: string; emails: string[]; phones: string[]; pagesRead: number }
   | { ok: false; reason: "UNSAFE_URL" | "ROBOTS" | "HTTP_ERROR" | "NOT_HTML" | "TOO_MANY_REDIRECTS" | "FAILED"; message: string };
 
 interface HopResult {
@@ -91,7 +91,7 @@ async function fetchOnce(url: string): Promise<HopResult> {
  * Fetches one page politely (robots.txt respected, identified user agent) and extracts the contact
  * emails and title. SSRF checks run for the first URL and again for every redirect target.
  */
-export async function scrapePage(inputUrl: string, safe: SafeUrlOptions = {}, fetchHop: (url: string) => Promise<HopResult> = fetchOnce): Promise<ScrapeOutcome> {
+async function scrapeOne(inputUrl: string, safe: SafeUrlOptions, fetchHop: (url: string) => Promise<HopResult>): Promise<ScrapeOutcome & { contactLinks?: string[] }> {
   let current = inputUrl;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const check = await checkUrl(current, safe);
@@ -115,8 +115,29 @@ export async function scrapePage(inputUrl: string, safe: SafeUrlOptions = {}, fe
     if (r.status && r.status >= 400) return { ok: false, reason: "HTTP_ERROR", message: `The website answered with HTTP ${r.status}` };
     if (!/html|xml/i.test(r.contentType ?? "")) return { ok: false, reason: "NOT_HTML", message: "That address is not a web page (HTML)" };
 
-    const { title, emails } = extractFromHtml(r.html ?? "");
-    return { ok: true, finalUrl: check.url.toString(), title, emails };
+    const { title, emails, phones, contactLinks } = extractFromHtml(r.html ?? "", check.url.toString());
+    return { ok: true, finalUrl: check.url.toString(), title, emails, phones, pagesRead: 1, contactLinks };
   }
   return { ok: false, reason: "TOO_MANY_REDIRECTS", message: "The website redirected too many times" };
+}
+
+/**
+ * Reads the page you give it, then up to two "Contact" / "About" pages linked from it on the same
+ * website (the address is usually there, not on the home page), and merges what they contain.
+ * Only the first page decides success: a broken contact page never fails the job.
+ */
+export async function scrapePage(inputUrl: string, safe: SafeUrlOptions = {}, fetchHop: (url: string) => Promise<HopResult> = fetchOnce): Promise<ScrapeOutcome> {
+  const first = await scrapeOne(inputUrl, safe, fetchHop);
+  if (!first.ok) return first;
+  const emails = [...first.emails];
+  const phones = [...first.phones];
+  let pagesRead = 1;
+  for (const link of first.contactLinks ?? []) {
+    const extra = await scrapeOne(link, safe, fetchHop).catch(() => null);
+    if (!extra || !extra.ok) continue;
+    pagesRead++;
+    for (const e of extra.emails) if (!emails.includes(e) && emails.length < 20) emails.push(e);
+    for (const ph of extra.phones) if (!phones.includes(ph) && phones.length < 5) phones.push(ph);
+  }
+  return { ok: true, finalUrl: first.finalUrl, title: first.title, emails, phones, pagesRead };
 }

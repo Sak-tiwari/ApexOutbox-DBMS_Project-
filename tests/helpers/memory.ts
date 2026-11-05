@@ -54,9 +54,10 @@ export class MemoryLeadStore implements LeadStore {
     const hit = [...this.leads.values()].find((x) => (x as LeadRecord & { dedupeKey?: string }).dedupeKey === key);
     if (hit) {
       hit.emails = [...new Set([...(hit.emails ?? []), ...l.emails])];
+      hit.phones = [...new Set([...(hit.phones ?? []), ...l.phones])];
       return { lead: structuredClone(hit), created: false };
     }
-    const lead = this.seed({ id: `N${String(++this.seq).padStart(4, "0")}`, name: l.name, company: l.company, ownerId: l.ownerId, website: l.website, email: l.email, emails: l.emails, source: l.source });
+    const lead = this.seed({ id: `N${String(++this.seq).padStart(4, "0")}`, name: l.name, company: l.company, ownerId: l.ownerId, website: l.website, email: l.email, emails: l.emails, phone: l.phones[0], phones: l.phones, source: l.source });
     (lead as LeadRecord & { dedupeKey?: string }).dedupeKey = key;
     return { lead: structuredClone(lead), created: true };
   }
@@ -158,7 +159,7 @@ export class MemoryScrapeJobStore implements ScrapeJobStore {
   async enqueue(ownerId: string, url: string) {
     const active = this.jobs.find((j) => j.ownerId === ownerId && j.url === url && (j.status === "QUEUED" || j.status === "RUNNING"));
     if (active) return { job: structuredClone(active), created: false };
-    const job: ScrapeJobRecord = { id: `J${String(++this.seq).padStart(4, "0")}`, ownerId, url, status: "QUEUED", attempts: 0, title: "", emails: [], errorCode: "", error: "", createdAt: new Date() };
+    const job: ScrapeJobRecord = { id: `J${String(++this.seq).padStart(4, "0")}`, ownerId, url, status: "QUEUED", attempts: 0, title: "", emails: [], phones: [], errorCode: "", error: "", createdAt: new Date() };
     this.jobs.push(job);
     return { job: structuredClone(job), created: true };
   }

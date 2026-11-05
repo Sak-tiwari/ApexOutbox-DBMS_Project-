@@ -169,11 +169,11 @@ ol.hist li small{display:block;color:var(--muted)}
 
     <section class="scrape" id="scrapePanel" hidden aria-labelledby="scrH">
       <h2 id="scrH">Find leads: scrape a website</h2>
-      <p class="sub">Paste a business website. The worker reads the page (respecting robots.txt), collects the contact emails and adds a lead to <b>New</b>.</p>
+      <p class="sub">Paste a business website. The worker reads the page (respecting robots.txt), collects the contact emails and phone numbers (also from its Contact page) and adds a lead to <b>New</b>.</p>
       <form id="fScrape"><input type="text" id="scrapeUrl" name="url" placeholder="example-business.com or https://..." required maxlength="2000" autocomplete="off" aria-label="Website address">
         <button class="btn primary" type="submit" id="btnScrape">Scrape website</button></form>
       <div class="demos" id="demos" hidden>Or try a demo page:
-        <button type="button" data-demo="bakery">Bloom Bakery</button><button type="button" data-demo="dental">BrightSmile Dental</button><button type="button" data-demo="studio">Kumar &amp; Sons</button><button type="button" data-demo="private">Page that blocks robots</button></div>
+        <button type="button" data-demo="bakery">Bloom Bakery</button><button type="button" data-demo="dental">BrightSmile Dental (contact on a 2nd page)</button><button type="button" data-demo="studio">Kumar &amp; Sons</button><button type="button" data-demo="private">Page that blocks robots</button></div>
       <div class="err" id="scrapeErr" role="alert"></div>
       <ul class="jobs" id="jobs" aria-live="polite"></ul>
     </section>
@@ -302,7 +302,7 @@ ol.hist li small{display:block;color:var(--muted)}
   function renderJobs() {
     $("jobs").innerHTML = state.jobs.map(function (j) {
       var cls = j.status === "DONE" ? "ok" : j.status === "FAILED" ? "bad" : j.status === "RUNNING" ? "info" : "warn";
-      var detail = j.status === "DONE" ? (j.emails.length ? esc(j.emails.join(", ")) : "No email address found on this page") + (j.leadCreated === false ? " (lead already existed)" : "")
+      var detail = j.status === "DONE" ? (j.emails.length || (j.phones && j.phones.length) ? esc(j.emails.concat(j.phones || []).join(", ")) : "No email or phone found on this page") + (j.pagesRead > 1 ? " (" + j.pagesRead + " pages read)" : "") + (j.leadCreated === false ? " (lead already existed)" : "")
         : j.status === "FAILED" ? esc(j.error) : "";
       return '<li><span class="chip ' + cls + '">' + JOB_TEXT[j.status] + '</span><span class="u">' + esc(j.url) + "</span>" + (detail ? '<span class="co">' + detail + "</span>" : "") + "</li>";
     }).join("");
@@ -353,7 +353,7 @@ ol.hist li small{display:block;color:var(--muted)}
         } else if (l.onboardingStatus === "CANCELLED") chips += '<span class="chip warn">Onboarding cancelled</span>';
         if (l.source && l.currentState === "New") chips += '<span class="chip info">Scraped</span>';
         if (l.deal && l.currentState !== "New") chips += '<span class="chip">' + esc(money(l.deal.amount, l.deal.currency)) + "</span>";
-        html += '<div class="card" draggable="true" data-id="' + esc(l.id) + '"><h3><button data-act="detail" data-id="' + esc(l.id) + '">' + esc(l.name) + '</button></h3><div class="co">' + esc(l.company) + "</div>" + (l.website && (l.email || host(l.website) !== l.company) ? '<div class="site">' + (host(l.website) !== l.company ? esc(host(l.website)) + (l.email ? " &middot; " : "") : "") + esc(l.email || "") + "</div>" : "") +
+        html += '<div class="card" draggable="true" data-id="' + esc(l.id) + '"><h3><button data-act="detail" data-id="' + esc(l.id) + '">' + esc(l.name) + '</button></h3><div class="co">' + esc(l.company) + "</div>" + (l.website || l.email || l.phone ? '<div class="site">' + [l.website && host(l.website) !== l.company ? host(l.website) : "", l.email, l.phone].filter(Boolean).map(esc).join(" &middot; ") + "</div>" : "") +
           (chips ? '<div class="meta">' + chips + "</div>" : "") + '<div class="acts">';
         next.forEach(function (t) {
           html += '<button class="go ' + (t === "Closed-Won" ? "won" : t === "Closed-Lost" ? "lost" : "") + '" data-act="move" data-id="' + esc(l.id) + '" data-to="' + esc(t) + '">&rarr; ' + esc(t) + "</button>";
@@ -432,6 +432,7 @@ ol.hist li small{display:block;color:var(--muted)}
       openModal('<header><h2>' + esc(l.name) + '</h2><p>' + esc(l.company) + " &middot; " + esc(l.currentState) + " &middot; version " + esc(l.version) + "</p></header><div class=\"body\">" +
         (l.website ? "<div><b>Website:</b> " + esc(l.website) + "</div>" : "") +
         (l.emails && l.emails.length ? "<div><b>Emails found:</b> " + esc(l.emails.join(", ")) + "</div>" : "") +
+        (l.phones && l.phones.length ? "<div><b>Phone numbers found:</b> " + esc(l.phones.join(", ")) + "</div>" : "") +
         (l.deal ? "<div><b>Deal:</b> " + esc(money(l.deal.amount, l.deal.currency)) + " &middot; " + esc(l.deal.email) + " &middot; " + esc(l.deal.description) + "</div>" : "") +
         (inv ? "<div><b>Invoice:</b> <span class=\"mono\">" + esc(inv.invoiceNumber) + "</span> " + emailChip(inv) + "</div>" : "") +
         "<div><b>History</b></div>" + (h.length ? '<ol class="hist">' + h.map(function (a) {
