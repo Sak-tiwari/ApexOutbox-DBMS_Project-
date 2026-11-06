@@ -3,6 +3,7 @@ import path from "node:path";
 
 /** Built-in templates live in templates/invoice/*.hbs (same folder from src/ and dist/). They cannot be edited or deleted. */
 export const BUILTINS = [
+  { id: "builtin:technolites", file: "technolites.hbs", name: "Technolites Tax Invoice", note: "Technolites IT Pvt. Ltd. branding with UPI QR (default)" },
   { id: "builtin:standard", file: "standard.hbs", name: "ApexOutbox Standard", note: "Clean layout with brand colour" },
   { id: "builtin:minimal", file: "minimal.hbs", name: "Minimal", note: "Lots of white space" },
   { id: "builtin:corporate", file: "corporate.hbs", name: "Corporate", note: "Colour band header" },
@@ -10,6 +11,8 @@ export const BUILTINS = [
 ] as const;
 export type BuiltinId = (typeof BUILTINS)[number]["id"];
 export const BUILTIN_VERSION = 1;
+/** The template used when a user has not picked another one. */
+export const DEFAULT_ID: BuiltinId = "builtin:technolites";
 export const FALLBACK_ID: BuiltinId = "builtin:standard";
 
 const DIR = path.resolve(__dirname, "..", "..", "templates", "invoice");

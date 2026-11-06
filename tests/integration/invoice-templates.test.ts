@@ -84,8 +84,8 @@ describe.skipIf(engine === "none" || !chromiumOk)("Invoice Templates", () => {
   describe("library and business details", () => {
     it("lists the four built-ins with Standard as default; built-ins cannot be edited or deleted", async () => {
       const list = (await request(app).get("/api/invoice-templates").set(A)).body.data;
-      expect(list.map((t: any) => t.id)).toEqual(["builtin:standard", "builtin:minimal", "builtin:corporate", "builtin:gst"]);
-      expect(list.filter((t: any) => t.isDefault).map((t: any) => t.id)).toEqual(["builtin:standard"]);
+      expect(list.map((t: any) => t.id)).toEqual(["builtin:technolites", "builtin:standard", "builtin:minimal", "builtin:corporate", "builtin:gst"]);
+      expect(list.filter((t: any) => t.isDefault).map((t: any) => t.id)).toEqual(["builtin:technolites"]);
       expect((await request(app).delete("/api/invoice-templates/builtin:standard").set(A)).status).toBe(409);
       expect((await request(app).put("/api/invoice-templates/builtin:gst").set(A).send({ source: "x" })).status).toBe(409);
     });
@@ -255,7 +255,7 @@ describe.skipIf(engine === "none" || !chromiumOk)("Invoice Templates", () => {
       }
       // A deal of B's naming A's template quietly uses B's own default instead
       const id = await closeDeal(B, { templateId });
-      expect(((await Invoice.findById(id).lean()) as any).snapshot.templateVersionId).toBe(builtinVersionId("builtin:standard"));
+      expect(((await Invoice.findById(id).lean()) as any).snapshot.templateVersionId).toBe(builtinVersionId("builtin:technolites"));
       // and a version id can never be rendered for another owner
       const t: any = await InvoiceTemplate.findById(templateId).lean();
       await expect(store.renderable(t.currentVersionId, "ownerB")).rejects.toThrow();
@@ -309,7 +309,7 @@ describe.skipIf(engine === "none" || !chromiumOk)("Invoice Templates", () => {
 
   it("deleting the default template makes the built-in Standard the default again; old invoices still render", async () => {
     await request(app).delete(`/api/invoice-templates/${templateId}`).set(A).expect(200);
-    expect((await request(app).get("/api/invoice-templates").set(A)).body.data.find((t: any) => t.isDefault).id).toBe("builtin:standard");
+    expect((await request(app).get("/api/invoice-templates").set(A)).body.data.find((t: any) => t.isDefault).id).toBe("builtin:technolites");
     const inv: any = await Invoice.findById(firstInvoiceId).lean();
     expect(inv.snapshot.templateVersionId).toBe(builtinVersionId("builtin:gst")); // regenerated earlier
     const anyV1: any = await InvoiceTemplateVersion.findOne({ templateId, version: 1 }).lean();

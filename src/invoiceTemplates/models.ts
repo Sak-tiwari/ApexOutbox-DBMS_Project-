@@ -22,7 +22,7 @@ const BusinessProfileSchema = new Schema({
   qrAssetId: { type: String, default: "" },
   defaultGstRate: { type: Number, default: 0 },
   terms: { type: String, default: "", maxlength: 1000 },
-  defaultTemplateId: { type: String, default: "builtin:standard" },
+  defaultTemplateId: { type: String, default: "builtin:technolites" },
 }, { timestamps: true });
 
 /** invoice_templates: a user's own templates. Built-in templates live in code and are never stored. */
@@ -73,5 +73,5 @@ export interface BusinessInfo {
 }
 export const EMPTY_BUSINESS: BusinessInfo = {
   name: "", address: "", gstin: "", state: "", email: "", phone: "", logoAssetId: "", bankName: "", account: "", ifsc: "", upiId: "",
-  paymentLink: "", qrAssetId: "", defaultGstRate: 0, terms: "", defaultTemplateId: "builtin:standard",
+  paymentLink: "", qrAssetId: "", defaultGstRate: 0, terms: "", defaultTemplateId: "builtin:technolites",
 };

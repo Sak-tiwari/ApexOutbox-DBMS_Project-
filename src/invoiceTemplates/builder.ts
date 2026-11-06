@@ -11,7 +11,7 @@ export const FONTS = {
 } as const;
 
 export const builderSchema = z.object({
-  layout: z.enum(["builtin:standard", "builtin:minimal", "builtin:corporate", "builtin:gst"]),
+  layout: z.enum(["builtin:standard", "builtin:minimal", "builtin:corporate", "builtin:gst", "builtin:technolites"]),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Colour must look like #4f46e5"),
   font: z.enum(["system", "serif", "modern", "mono"]),
   showLogo: z.boolean().default(true),

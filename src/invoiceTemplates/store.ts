@@ -48,7 +48,7 @@ export class InvoiceTemplateStore {
     const def = (await this.getBusiness(ownerId)).defaultTemplateId;
     const own = await InvoiceTemplate.find({ ownerId }).sort({ updatedAt: -1 }).limit(100).lean<any[]>();
     const ownIds = new Set(own.map((t) => String(t._id)));
-    const effectiveDefault = isBuiltin(def) || ownIds.has(def) ? def : "builtin:standard";
+    const effectiveDefault = isBuiltin(def) || ownIds.has(def) ? def : "builtin:technolites";
     return [
       ...BUILTINS.map((b) => ({ id: b.id, name: b.name, type: "builtin" as const, builtin: true, isDefault: effectiveDefault === b.id, currentVersion: 1, currentVersionId: builtinVersionId(b.id), note: b.note })),
       ...own.map((t) => ({ id: String(t._id), name: t.name, type: t.type, builtin: false, isDefault: effectiveDefault === String(t._id), currentVersion: t.currentVersion, currentVersionId: t.currentVersionId, updatedAt: t.updatedAt })),
@@ -103,7 +103,7 @@ export class InvoiceTemplateStore {
     const r = await InvoiceTemplate.deleteOne({ _id: id, ownerId });
     if (r.deletedCount === 0) throw new TemplateError("Template not found", 404);
     // Versions are kept on purpose: invoices already made with this template still regenerate exactly.
-    await BusinessProfile.updateOne({ ownerId, defaultTemplateId: id }, { $set: { defaultTemplateId: "builtin:standard" } });
+    await BusinessProfile.updateOne({ ownerId, defaultTemplateId: id }, { $set: { defaultTemplateId: "builtin:technolites" } });
   }
   /** One default per user: it is a single field on the user's (unique) business profile. */
   async setDefault(ownerId: string, id: string): Promise<void> {
@@ -127,14 +127,14 @@ export class InvoiceTemplateStore {
   // ---------- which template an invoice uses ----------
   /** The version id a NEW invoice records: the chosen template (if it is the user's) or the user's default. */
   async resolveVersionId(ownerId: string | undefined, templateId?: string): Promise<string> {
-    if (!ownerId) return builtinVersionId("builtin:standard");
+    if (!ownerId) return builtinVersionId("builtin:technolites");
     const want = templateId || (await this.getBusiness(ownerId)).defaultTemplateId;
     if (isBuiltin(want)) return builtinVersionId(want);
     if (isId(want)) {
       const t = await InvoiceTemplate.findOne({ _id: want, ownerId }).lean<any>();
       if (t) return t.currentVersionId;
     }
-    return builtinVersionId("builtin:standard");
+    return builtinVersionId("builtin:technolites");
   }
   /** Source and options for a recorded version. ownerId is checked so a version id can never cross users. */
   async renderable(versionId: string, ownerId?: string): Promise<Renderable> {
