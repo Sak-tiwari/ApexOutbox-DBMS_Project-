@@ -35,6 +35,7 @@ export class InvoiceTemplateStore {
     if (!d) return { ...EMPTY_BUSINESS };
     const out = { ...EMPTY_BUSINESS };
     for (const k of Object.keys(EMPTY_BUSINESS) as Array<keyof BusinessInfo>) if (d[k] !== undefined && d[k] !== null) (out as any)[k] = d[k];
+    if (!d.defaultChosen) out.defaultTemplateId = "builtin:technolites";
     return out;
   }
   async saveBusiness(ownerId: string, patch: Partial<BusinessInfo>): Promise<BusinessInfo> {
@@ -110,7 +111,7 @@ export class InvoiceTemplateStore {
     if (!isBuiltin(id)) {
       if (!isId(id) || !(await InvoiceTemplate.exists({ _id: id, ownerId }))) throw new TemplateError("Template not found", 404);
     }
-    await BusinessProfile.updateOne({ ownerId }, { $set: { defaultTemplateId: id }, $setOnInsert: { ownerId } }, { upsert: true });
+    await BusinessProfile.updateOne({ ownerId }, { $set: { defaultTemplateId: id, defaultChosen: true }, $setOnInsert: { ownerId } }, { upsert: true });
   }
   async versions(ownerId: string, id: string): Promise<VersionRecord[]> {
     if (!isId(id) || !(await InvoiceTemplate.exists({ _id: id, ownerId }))) throw new TemplateError("Template not found", 404);

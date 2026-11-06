@@ -23,6 +23,8 @@ const BusinessProfileSchema = new Schema({
   defaultGstRate: { type: Number, default: 0 },
   terms: { type: String, default: "", maxlength: 1000 },
   defaultTemplateId: { type: String, default: "builtin:technolites" },
+  /** True once the user clicked "Set default". Profiles that never did use the Technolites template. */
+  defaultChosen: { type: Boolean, default: false },
 }, { timestamps: true });
 
 /** invoice_templates: a user's own templates. Built-in templates live in code and are never stored. */

@@ -307,7 +307,15 @@ describe.skipIf(engine === "none" || !chromiumOk)("Invoice Templates", () => {
     });
   });
 
-  it("deleting the default template makes the built-in Standard the default again; old invoices still render", async () => {
+  it("a legacy profile that stored Standard (never chose a default) still gets Technolites", async () => {
+    await BusinessProfile.updateOne({ ownerId: "legacy-user" }, { $set: { defaultTemplateId: "builtin:standard" } }, { upsert: true });
+    const ver = await store.resolveVersionId("legacy-user");
+    expect(ver).toBe(builtinVersionId("builtin:technolites"));
+    await store.setDefault("legacy-user", "builtin:standard");
+    expect(await store.resolveVersionId("legacy-user")).toBe(builtinVersionId("builtin:standard"));
+  });
+
+  it("deleting the default template makes the built-in Technolites template the default again; old invoices still render", async () => {
     await request(app).delete(`/api/invoice-templates/${templateId}`).set(A).expect(200);
     expect((await request(app).get("/api/invoice-templates").set(A)).body.data.find((t: any) => t.isDefault).id).toBe("builtin:technolites");
     const inv: any = await Invoice.findById(firstInvoiceId).lean();
