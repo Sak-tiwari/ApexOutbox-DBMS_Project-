@@ -18,6 +18,59 @@ When you close that lead as Won, the client email is pre-filled from what the sc
 - Demo: three fake business pages and one page blocked by robots.txt live in `public/demo/` (buttons in the dashboard).
   They are only reachable by the scraper when `SCRAPER_ALLOW_LOOPBACK` is on (default outside production).
 
+## Lead Finder (find clients who are asking for work)
+
+The **Lead Finder** tab is the reverse of the website scraper: instead of listing businesses, it finds *requests*:
+people and companies posting that they need a website, a logo, an app and so on, so you can pitch them.
+
+1. **Service profile**: describe your business in plain words. Keywords and synonyms are extracted (no LLM: a stop-word list
+   plus a synonym map in `src/leadFinder/keywords.ts`). You can edit them.
+2. **Auto** (one click, uses your keywords) or **Manual** (type a query) with filters: platforms, budget range, posted within
+   24h/7d/30d, location, remote only, experience level.
+3. The API only queues the search. The worker runs every chosen source in parallel; each source has its own status chip
+   (searching / done / blocked / failed) and one failing source never fails the search.
+4. Results are scored 0-100 against your keywords (title hits count most, then description, plus freshness), de-duplicated
+   (the same request on two platforms is one row with both links) and sortable.
+5. Per result: **Add to pipeline** (creates a `New` lead with the post link, safe to click twice), **Save**, **Dismiss**, **Open post**.
+6. **Saved searches** re-run on a schedule (1 h / 6 h / 24 h) in the worker; new matches show as a badge on the tab.
+
+Contact is through the original post (the link), because the platforms do not publish emails or phone numbers.
+
+**Sources:** Reddit (r/forhire, r/slavelabour, r/DoneDirtCheap), RemoteOK, Remotive and We Work Remotely, all through their public
+JSON/RSS feeds. Fiverr, Upwork, Glassdoor, Indeed and LinkedIn are deliberately not included: they forbid scraping and require
+logins or CAPTCHAs, which this project does not bypass.
+
+**Demo mode:** set `LEAD_FINDER_MOCK=true` in `.env` (then restart). Only realistic *sample* requests are used, so a demo never depends on
+the internet or on a site blocking us. The tab shows a "Demo mode" banner. `LEAD_FINDER_DISABLED_SOURCES=reddit,remoteok` switches live sources off.
+
+**Hygiene** (one place: `src/leadFinder/http.ts`): identifying user agent, 12 s timeout, 2 retries with exponential backoff for network errors and 5xx,
+1 s minimum gap per host, 3 MB size cap, 10-minute cache for identical requests, HTTP 401/403/429 reported as "blocked" and never retried.
+
+### Add a new source
+
+1. Create `src/leadFinder/sources/mysite.ts`:
+   ```ts
+   import type { LeadSource } from "../types";
+   export function mySiteSource(): LeadSource {
+     return {
+       id: "mysite", name: "My Site",
+       async search({ keywords, filters }, ctx) {
+         const json = JSON.parse(await ctx.get("https://mysite.example/api/jobs"));   // ctx.get = polite HTTP
+         return json.jobs.map((j: any) => ({
+           externalId: String(j.id), title: j.title, url: j.link, company: j.company,
+           description: j.text, budgetText: j.pay, location: j.where, remote: true, postedAt: new Date(j.date),
+         }));
+       },
+     };
+   }
+   ```
+   Throw `SourceBlockedError` if the site refuses automated access.
+2. Add `mySiteSource()` to `liveSources()` in `src/leadFinder/sources/index.ts`. Scoring, filters, de-duplication, the status chip and the UI need no change.
+3. Add a test in `tests/unit/lead-finder-sources.test.ts` with a sample of the site's real response.
+
+Data model (MongoDB): `serviceprofiles` (one per user), `leadsearches` (a saved search is the same document with `saved: true`),
+`foundleads` with a **unique index on (ownerId, source, externalId)**. Every query includes the owner id.
+
 ## Overview
 Phase 4 automates client onboarding, invoice creation,
 PDF generation, and transactional email processing.

@@ -94,6 +94,46 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .jobs .u{flex:1 1 220px;overflow-wrap:anywhere}
 .card .site{margin-top:3px;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere}
 
+
+/* tabs + lead finder */
+.tabs{display:flex;gap:4px;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+.tab{all:unset;cursor:pointer;padding:12px 16px;font-weight:600;font-size:14px;color:var(--muted);border-bottom:3px solid transparent;display:flex;gap:8px;align-items:center}
+.tab:hover{color:var(--ink)} .tab.on{color:var(--brand);border-bottom-color:var(--brand)}
+.tab:focus-visible{outline:2px solid var(--brand);outline-offset:-2px;border-radius:6px}
+.badge{background:var(--bad);color:#fff;border-radius:999px;font-size:11px;padding:1px 7px;font-weight:700}
+.fcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;margin-bottom:16px}
+.fcard h2{margin:0 0 2px;font-size:16px} .fcard p.sub{margin:0 0 10px;color:var(--muted);font-size:13px}
+.fcard textarea{width:100%;border:1px solid #cfd3e4;border-radius:10px;padding:9px 12px;min-height:64px;resize:vertical;font:inherit}
+.fcard input[type=text],.fcard input[type=number],.fcard select{border:1px solid #cfd3e4;border-radius:9px;padding:8px 10px;background:#fff;font:inherit;min-width:0}
+.kws{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;align-items:center}
+.kw{background:var(--brand-soft);color:var(--brand);border-radius:999px;padding:3px 4px 3px 10px;font-size:13px;font-weight:600;display:inline-flex;gap:4px;align-items:center}
+.kw button{all:unset;cursor:pointer;width:18px;height:18px;text-align:center;border-radius:50%;line-height:18px}
+.kw button:hover{background:#fff}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;border:1px solid #cfd3e4;border-radius:10px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:8px 14px;font-weight:600;font-size:13.5px;background:#fff}
+.seg button.on{background:var(--brand);color:#fff}
+.seg button:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.filters label{font-size:12px;color:var(--muted)} .filters label input,.filters label select{width:100%;color:var(--ink)}
+.plats{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin:8px 0}
+.plats label{display:flex;gap:5px;align-items:center;font-weight:500;color:var(--ink);white-space:nowrap}
+.plats input,.filters input[type=checkbox]{width:auto}
+.srcs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.score{display:inline-block;min-width:38px;text-align:center;border-radius:8px;padding:2px 6px;font-weight:700;font-variant-numeric:tabular-nums}
+.score.hi{background:var(--ok-bg);color:var(--ok)} .score.mid{background:var(--warn-bg);color:var(--warn)} .score.lo{background:#eceef6;color:var(--muted)}
+.ftable td button.link{all:unset;cursor:pointer;color:var(--brand);font-weight:600;text-align:left}
+.ftable td button.link:hover{text-decoration:underline}
+.ftable td small{display:block;color:var(--muted)}
+.saved{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.saved li{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:8px;font-size:14px}
+.saved .nm{flex:1 1 200px;font-weight:600} .saved small{color:var(--muted);font-weight:400;display:block}
+.banner{border-radius:10px;padding:9px 12px;font-size:13.5px;margin:8px 0;background:var(--info-bg);color:var(--info)}
+.banner.bad{background:var(--bad-bg);color:var(--bad)}
+.drawer p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;font-size:14px}
+.drawer dl{display:grid;grid-template-columns:110px 1fr;gap:6px 10px;margin:0;font-size:14px} .drawer dt{color:var(--muted)} .drawer dd{margin:0;overflow-wrap:anywhere}
+@media (max-width:700px){.tabs{padding:0 8px}.tab{padding:12px 10px}}
+
 /* flow strip */
 .flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .flow i{font-style:normal;padding:2px 8px;border-radius:999px;background:#eceef6}
@@ -159,8 +199,12 @@ ol.hist li small{display:block;color:var(--muted)}
     <span class="pill" id="pMail" hidden></span>
     <button class="btn small" id="btnKey" title="Use a different API key">Change key</button>
   </header>
+  <nav class="tabs" id="tabs" aria-label="Sections" hidden>
+    <button class="tab on" data-tab="pipeline" aria-selected="true">Pipeline</button>
+    <button class="tab" data-tab="finder" aria-selected="false">Lead Finder <span class="badge" id="finderBadge" hidden>0</span></button>
+  </nav>
 
-  <main>
+  <main id="viewPipeline">
     <div class="toolbar">
       <button class="btn primary" id="btnNew">+ New lead</button>
       <input type="search" id="search" placeholder="Search name or company" aria-label="Search leads">
@@ -188,6 +232,69 @@ ol.hist li small{display:block;color:var(--muted)}
           <tbody id="invBody"><tr><td colspan="5" class="empty">No invoices yet. Move a lead to Closed-Won to create one.</td></tr></tbody>
         </table>
       </div>
+    </section>
+  </main>
+
+  <main id="viewFinder" hidden>
+    <div class="banner" id="fMock" hidden>Demo mode: this tab shows realistic sample requests, not live websites.</div>
+
+    <section class="fcard" aria-labelledby="fpH">
+      <h2 id="fpH">Service profile</h2>
+      <p class="sub">Describe what your business offers. We turn it into search keywords you can edit.</p>
+      <textarea id="fpText" maxlength="2000" placeholder="e.g. We build websites for small businesses: React, WordPress, Shopify" aria-label="What your business offers"></textarea>
+      <div class="kws" id="fpKws" aria-label="Keywords"></div>
+      <div class="actions">
+        <input type="text" id="fpAdd" placeholder="Add a keyword" maxlength="40" aria-label="Add a keyword" style="width:180px">
+        <button class="btn" id="fpSuggest" type="button">Suggest keywords</button>
+        <button class="btn primary" id="fpSave" type="button">Save profile</button>
+        <span class="err" id="fpErr" role="alert"></span>
+      </div>
+    </section>
+
+    <section class="fcard" aria-labelledby="fsH">
+      <h2 id="fsH">Find clients</h2>
+      <p class="sub">Finds people and businesses that are asking for work like yours right now.</p>
+      <div class="actions">
+        <div class="seg" role="group" aria-label="Search mode"><button type="button" id="fmAuto" class="on" aria-pressed="true">Auto</button><button type="button" id="fmManual" aria-pressed="false">Manual</button></div>
+        <input type="text" id="fQuery" placeholder="What are you looking for? e.g. react developer" maxlength="200" aria-label="Search query" style="flex:1 1 260px" hidden>
+        <button class="btn primary" id="fGo" type="button">Find clients for my business</button>
+      </div>
+      <details id="fFilters" style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:13.5px">Filters</summary>
+        <div class="plats" id="fPlats" aria-label="Platforms"></div>
+        <div class="filters">
+          <label>Budget from<input type="number" id="fBmin" min="0" step="50" placeholder="any"></label>
+          <label>Budget to<input type="number" id="fBmax" min="0" step="50" placeholder="any"></label>
+          <label>Posted within<select id="fWithin"><option value="">Any time</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="30d">30 days</option></select></label>
+          <label>Location<input type="text" id="fLoc" maxlength="60" placeholder="e.g. India"></label>
+          <label>Experience level<select id="fLevel"><option value="">Any</option><option value="entry">Entry</option><option value="mid">Mid</option><option value="senior">Senior</option></select></label>
+          <label style="align-content:end"><span><input type="checkbox" id="fRemote" style="width:auto"> Remote only</span></label>
+        </div>
+        <div class="actions"><label style="display:flex;gap:6px;align-items:center;font-weight:500"><input type="checkbox" id="fSave" style="width:auto"> Save this search and re-run it every</label>
+          <select id="fEvery" aria-label="How often"><option value="1">hour</option><option value="6" selected>6 hours</option><option value="24">day</option></select>
+          <input type="text" id="fName" placeholder="Name for this search" maxlength="80" aria-label="Saved search name" style="width:200px"></div>
+      </details>
+      <div class="err" id="fErr" role="alert"></div>
+      <div class="srcs" id="fSrcs" aria-live="polite"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="frH">
+      <h2 id="frH">Results <span class="pill" id="frCount">0</span>
+        <span style="flex:1"></span>
+        <select id="frSource" aria-label="Platform" style="font-size:13px"></select>
+        <select id="frScore" aria-label="Minimum score" style="font-size:13px"><option value="0">Any score</option><option value="40">Score 40+</option><option value="60">Score 60+</option><option value="80">Score 80+</option></select>
+        <select id="frSort" aria-label="Sort" style="font-size:13px"><option value="score">Best match</option><option value="date">Newest</option><option value="budget">Highest budget</option></select>
+        <select id="frStatus" aria-label="Show" style="font-size:13px"><option value="">Active</option><option value="SAVED">Saved</option><option value="PIPELINED">In pipeline</option><option value="DISMISSED">Dismissed</option></select>
+      </h2>
+      <div class="tablewrap"><table class="ftable">
+        <thead><tr><th>Match</th><th>Request</th><th>Platform</th><th>Budget</th><th>Location</th><th>Posted</th><th>Actions</th></tr></thead>
+        <tbody id="frBody"><tr><td colspan="7" class="empty">Run a search to see requests from people looking for your services.</td></tr></tbody>
+      </table></div>
+    </section>
+
+    <section class="fcard" style="margin-top:22px" aria-labelledby="fvH">
+      <h2 id="fvH">Saved searches</h2>
+      <p class="sub">The worker re-runs these on their schedule. New matches show as a badge on this tab.</p>
+      <ul class="saved" id="fSaved"><li class="empty" style="border:0">No saved searches yet. Tick "Save this search" under Filters.</li></ul>
     </section>
   </main>
 </div>
@@ -281,6 +388,7 @@ ol.hist li small{display:block;color:var(--muted)}
     if (meta.emailMode === "smtp") { mail.className = "pill up"; mail.innerHTML = '<span class="dot"></span>Email: live SMTP'; }
     else { mail.className = "pill demo"; mail.textContent = "Email: demo mode (nothing is really sent)"; }
     state.scraper = !!meta.scraper;
+    F.on = !!meta.leadFinder; $("tabs").hidden = !F.on; if (F.on) { pollSummary(); } setTab("pipeline");
     $("scrapePanel").hidden = !state.scraper; $("demos").hidden = !meta.demoPages;
     $("gate").hidden = true; $("app").hidden = false;
     refresh(); startPolling();
@@ -351,7 +459,7 @@ ol.hist li small{display:block;color:var(--muted)}
           chips += l.onboardingStatus === "DONE" ? '<span class="chip ok">Client created</span>' : l.onboardingStatus === "FAILED" ? '<span class="chip bad">Onboarding failed</span>' : '<span class="chip warn">Creating client&hellip;</span>';
           if (inv) chips += emailChip(inv);
         } else if (l.onboardingStatus === "CANCELLED") chips += '<span class="chip warn">Onboarding cancelled</span>';
-        if (l.source && l.currentState === "New") chips += '<span class="chip info">Scraped</span>';
+        if (l.source && l.currentState === "New") chips += '<span class="chip info">' + (/^Lead Finder/.test(l.source) ? "From Lead Finder" : "Scraped") + "</span>";
         if (l.deal && l.currentState !== "New") chips += '<span class="chip">' + esc(money(l.deal.amount, l.deal.currency)) + "</span>";
         html += '<div class="card" draggable="true" data-id="' + esc(l.id) + '"><h3><button data-act="detail" data-id="' + esc(l.id) + '">' + esc(l.name) + '</button></h3><div class="co">' + esc(l.company) + "</div>" + (l.website || l.email || l.phone ? '<div class="site">' + [l.website && host(l.website) !== l.company ? host(l.website) : "", l.email, l.phone].filter(Boolean).map(esc).join(" &middot; ") + "</div>" : "") +
           (chips ? '<div class="meta">' + chips + "</div>" : "") + '<div class="acts">';
@@ -476,6 +584,177 @@ ol.hist li small{display:block;color:var(--muted)}
       .then(function (b) { var url = URL.createObjectURL(b); if (w) w.location.href = url; else window.location.href = url; setTimeout(function () { URL.revokeObjectURL(url); }, 60000); })
       .catch(function (err) { if (w) w.close(); toast(err.message, "bad"); });
   }
+
+  /* ---------- lead finder ---------- */
+  var F = { on: false, mock: false, tab: "pipeline", mode: "auto", kws: [], sources: [], searchId: null, search: null, results: [], saved: [], unseen: 0, polling: null, profileLoaded: false };
+  var SRC_TEXT = { queued: "waiting", running: "searching...", done: "done", blocked: "blocked", failed: "failed" };
+  function safeHref(u) { return /^https?:\/\//i.test(u || "") ? u : "#"; }
+  function ago(d) {
+    if (!d) return "unknown"; var s = (Date.now() - new Date(d).getTime()) / 1000;
+    if (s < 3600) return Math.max(1, Math.round(s / 60)) + " min ago"; if (s < 86400) return Math.round(s / 3600) + " h ago";
+    return Math.round(s / 86400) + " d ago";
+  }
+  function scoreChip(n) { return '<span class="score ' + (n >= 70 ? "hi" : n >= 40 ? "mid" : "lo") + '" title="Match score against your profile">' + n + "</span>"; }
+
+  function setTab(t) {
+    F.tab = t;
+    $("viewPipeline").hidden = t !== "pipeline"; $("viewFinder").hidden = t !== "finder";
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (b) { var on = b.getAttribute("data-tab") === t; b.classList.toggle("on", on); b.setAttribute("aria-selected", on ? "true" : "false"); });
+    if (t === "finder") { loadFinder(); api("/api/lead-finder/seen", { method: "POST" }).then(function () { F.unseen = 0; renderBadge(); }).catch(function () {}); }
+  }
+  function renderBadge() { var b = $("finderBadge"); b.hidden = !(F.unseen > 0); b.textContent = F.unseen; }
+  function pollSummary() { if (!F.on) return Promise.resolve(); return api("/api/lead-finder/summary").then(function (r) { F.unseen = F.tab === "finder" ? 0 : r.data.unseen; renderBadge(); }).catch(function () {}); }
+
+  function loadFinder() {
+    var tasks = [];
+    if (!F.profileLoaded) tasks.push(api("/api/lead-finder/profile").then(function (r) {
+      F.profileLoaded = true;
+      if (r.data) { $("fpText").value = r.data.description; F.kws = r.data.keywords.slice(); renderKws(); }
+    }));
+    tasks.push(api("/api/lead-finder/sources").then(function (r) { F.sources = r.data.sources; F.mock = r.data.mock; renderPlats(); $("fMock").hidden = !F.mock; }));
+    return Promise.all(tasks.concat([loadSaved()])).catch(function (e) { if (e.message !== "unauthorised") toast(e.message, "bad"); });
+  }
+  function loadSaved() { return api("/api/lead-finder/saved-searches").then(function (r) { F.saved = r.data; renderSaved(); }); }
+
+  function renderKws() {
+    $("fpKws").innerHTML = F.kws.length ? F.kws.map(function (k, i) { return '<span class="kw">' + esc(k) + '<button type="button" data-act="kwdel" data-i="' + i + '" aria-label="Remove ' + esc(k) + '">&times;</button></span>'; }).join("") : '<span class="sub" style="color:var(--muted);font-size:13px">No keywords yet. Describe your business, then press "Suggest keywords".</span>';
+  }
+  function renderPlats() {
+    $("fPlats").innerHTML = F.sources.map(function (s) { return '<label><input type="checkbox" class="fplat" value="' + esc(s.id) + '" checked> ' + esc(s.name) + "</label>"; }).join("");
+    $("frSource").innerHTML = '<option value="">All platforms</option>' + F.sources.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.name) + "</option>"; }).join("");
+  }
+  function addKeyword() {
+    var v = $("fpAdd").value.trim().toLowerCase().slice(0, 40); if (!v) return;
+    if (F.kws.indexOf(v) < 0 && F.kws.length < 15) F.kws.push(v); $("fpAdd").value = ""; renderKws();
+  }
+  $("fpAdd").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); addKeyword(); } });
+  $("fpSuggest").addEventListener("click", function () {
+    $("fpErr").textContent = "";
+    api("/api/lead-finder/keywords/suggest", { method: "POST", body: { description: $("fpText").value } })
+      .then(function (r) { F.kws = r.data.keywords; renderKws(); }).catch(function (e) { $("fpErr").textContent = e.message; });
+  });
+  $("fpSave").addEventListener("click", function () {
+    $("fpErr").textContent = ""; addKeyword();
+    api("/api/lead-finder/profile", { method: "POST", body: { description: $("fpText").value, keywords: F.kws } })
+      .then(function (r) { F.kws = r.data.keywords; renderKws(); toast("Service profile saved", "ok"); }).catch(function (e) { $("fpErr").textContent = e.message; });
+  });
+
+  function setMode(m) {
+    F.mode = m;
+    $("fmAuto").classList.toggle("on", m === "auto"); $("fmManual").classList.toggle("on", m === "manual");
+    $("fmAuto").setAttribute("aria-pressed", m === "auto"); $("fmManual").setAttribute("aria-pressed", m === "manual");
+    $("fQuery").hidden = m === "auto"; $("fGo").textContent = m === "auto" ? "Find clients for my business" : "Search";
+  }
+  $("fmAuto").addEventListener("click", function () { setMode("auto"); });
+  $("fmManual").addEventListener("click", function () { setMode("manual"); $("fQuery").focus(); });
+
+  function readFilters() {
+    var f = {}, num = function (id) { var v = $(id).value; return v === "" ? undefined : Number(v); };
+    var boxes = document.querySelectorAll(".fplat"), on = [];
+    Array.prototype.forEach.call(boxes, function (b) { if (b.checked) on.push(b.value); });
+    if (boxes.length && on.length && on.length < boxes.length) f.platforms = on;
+    if (num("fBmin") !== undefined) f.budgetMin = num("fBmin"); if (num("fBmax") !== undefined) f.budgetMax = num("fBmax");
+    if ($("fWithin").value) f.postedWithin = $("fWithin").value; if ($("fLoc").value.trim()) f.location = $("fLoc").value.trim();
+    if ($("fLevel").value) f.level = $("fLevel").value; if ($("fRemote").checked) f.remoteOnly = true;
+    return f;
+  }
+  $("fGo").addEventListener("click", function () {
+    $("fErr").textContent = "";
+    var body = { mode: F.mode, filters: readFilters() };
+    if (F.mode === "manual") body.query = $("fQuery").value;
+    if ($("fSave").checked) body.save = { name: $("fName").value.trim() || (F.mode === "auto" ? "My services" : $("fQuery").value.trim().slice(0, 60)), everyHours: Number($("fEvery").value) };
+    $("fGo").disabled = true;
+    api("/api/lead-finder/search", { method: "POST", body: body }).then(function (r) {
+      F.searchId = r.data.id; F.search = r.data; F.results = []; renderSources(); renderResults(); startFinderPoll(); if (body.save) loadSaved();
+    }).catch(function (e) { $("fErr").textContent = e.message; }).then(function () { $("fGo").disabled = false; });
+  });
+
+  function renderSources() {
+    var s = F.search; if (!s) { $("fSrcs").innerHTML = ""; return; }
+    var html = "";
+    if (s.status === "QUEUED") html += '<span class="chip warn">Waiting for the worker</span>';
+    (s.sources || []).forEach(function (c) {
+      var cls = c.status === "done" ? "ok" : c.status === "blocked" ? "warn" : c.status === "failed" ? "bad" : "info";
+      html += '<span class="chip ' + cls + '" title="' + esc(c.error || "") + '">' + esc(c.name) + ": " + SRC_TEXT[c.status] + (c.status === "done" ? " (" + c.count + ")" : "") + (c.error ? " - " + esc(c.error) : "") + "</span>";
+    });
+    if (s.status === "FAILED") html += '<div class="banner bad" style="flex-basis:100%">' + esc(s.error || "The search failed") + (F.mock ? "" : ". If the live sites are blocked here, set LEAD_FINDER_MOCK=true and restart to use sample data.") + "</div>";
+    $("fSrcs").innerHTML = html;
+  }
+  function resultQs() {
+    var q = ["sort=" + $("frSort").value], sc = $("frScore").value, st = $("frStatus").value, so = $("frSource").value;
+    if (sc !== "0") q.push("minScore=" + sc); if (st) q.push("status=" + st); if (so) q.push("source=" + encodeURIComponent(so));
+    return "?" + q.join("&");
+  }
+  function loadSearch() {
+    if (!F.searchId) return Promise.resolve();
+    return api("/api/lead-finder/search/" + encodeURIComponent(F.searchId) + resultQs()).then(function (r) {
+      F.search = r.data.search; F.results = r.data.results; renderSources(); renderResults();
+      if (F.search.status === "DONE" || F.search.status === "FAILED") stopFinderPoll();
+    }).catch(function (e) { if (e.message !== "unauthorised") { stopFinderPoll(); $("fErr").textContent = e.message; } });
+  }
+  function startFinderPoll() { stopFinderPoll(); loadSearch(); F.polling = setInterval(function () { if (!state.busy && !document.hidden) loadSearch(); }, 1500); }
+  function stopFinderPoll() { if (F.polling) clearInterval(F.polling); F.polling = null; }
+  ["frSource", "frScore", "frSort", "frStatus"].forEach(function (id) { $(id).addEventListener("change", loadSearch); });
+
+  function renderResults() {
+    var s = F.search, body = $("frBody"); $("frCount").textContent = F.results.length;
+    if (!F.results.length) {
+      var running = s && (s.status === "QUEUED" || s.status === "RUNNING");
+      body.innerHTML = '<tr><td colspan="7" class="empty">' + (running ? "Searching... results appear here as soon as the sources answer." : s ? "No matching requests. Try other keywords or loosen the filters." : "Run a search to see requests from people looking for your services.") + "</td></tr>";
+      return;
+    }
+    body.innerHTML = F.results.map(function (r) {
+      var also = r.alsoOn && r.alsoOn.length ? '<small>Also on ' + r.alsoOn.map(function (a) { return esc(a.source); }).join(", ") + "</small>" : "";
+      var st = r.status === "PIPELINED" ? '<span class="chip ok">In pipeline</span>' : r.status === "SAVED" ? '<span class="chip info">Saved</span>' : r.status === "DISMISSED" ? '<span class="chip">Dismissed</span>' : "";
+      return "<tr><td>" + scoreChip(r.score) + "</td>" +
+        '<td><button class="link" data-act="fdetail" data-id="' + esc(r.id) + '">' + esc(r.title) + "</button><small>" + esc(r.company || "") + "</small>" + also + st + "</td>" +
+        "<td>" + esc(r.sourceName) + "</td><td>" + esc(r.budgetText || "-") + "</td><td>" + esc(r.location || "-") + "</td><td>" + esc(ago(r.postedAt)) + "</td>" +
+        '<td><div class="actions">' + (r.status === "PIPELINED" ? "" : '<button class="btn small primary" data-act="fpipe" data-id="' + esc(r.id) + '">Add to pipeline</button>') +
+        '<a class="btn small" href="' + esc(safeHref(r.url)) + '" target="_blank" rel="noopener noreferrer">Open post</a></div></td></tr>';
+    }).join("");
+  }
+
+  function renderSaved() {
+    var total = 0;
+    $("fSaved").innerHTML = F.saved.length ? F.saved.map(function (s) {
+      total += s.unseen || 0;
+      var sched = s.everyHours ? "every " + (s.everyHours === 1 ? "hour" : s.everyHours === 24 ? "day" : s.everyHours + " hours") : "manual runs only";
+      return '<li><span class="nm">' + esc(s.name || s.query) + (s.unseen ? ' <span class="badge">' + s.unseen + " new</span>" : "") + "<small>" + esc(s.keywords.slice(0, 4).join(", ")) + " &middot; " + esc(sched) + " &middot; last run " + esc(ago(s.lastRunAt)) + " &middot; " + (s.status === "RUNNING" || s.status === "QUEUED" ? "running now" : s.resultCount + " results") + "</small></span>" +
+        '<button class="btn small" data-act="sopen" data-id="' + esc(s.id) + '">Open</button><button class="btn small" data-act="srun" data-id="' + esc(s.id) + '">Run now</button><button class="btn small" data-act="sdel" data-id="' + esc(s.id) + '">Remove</button></li>';
+    }).join("") : '<li class="empty" style="border:0">No saved searches yet. Tick "Save this search" under Filters.</li>';
+  }
+
+  function foundById(id) { for (var i = 0; i < F.results.length; i++) if (F.results[i].id === id) return F.results[i]; return null; }
+  function fdetail(id) {
+    var r = foundById(id); if (!r) return;
+    var links = ['<a href="' + esc(safeHref(r.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(r.sourceName) + "</a>"].concat((r.alsoOn || []).map(function (a) { return '<a href="' + esc(safeHref(a.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(a.source) + "</a>"; }));
+    openModal('<header><h2>' + esc(r.title) + "</h2><p>" + esc(r.company || "") + " &middot; match " + r.score + "/100</p></header>" +
+      '<div class="body drawer"><dl><dt>Platform</dt><dd>' + links.join(", ") + "</dd><dt>Budget</dt><dd>" + esc(r.budgetText || "not stated") + "</dd><dt>Location</dt><dd>" + esc(r.location || "not stated") + "</dd><dt>Posted</dt><dd>" + esc(ago(r.postedAt)) + "</dd><dt>Contact</dt><dd>Through the original post (link above)</dd></dl>" +
+      "<p>" + esc(r.description || "No description.") + '</p><div class="foot"><button class="btn" data-act="close">Close</button>' +
+      (r.status === "DISMISSED" || r.status === "PIPELINED" ? "" : '<button class="btn" data-act="fdismiss" data-id="' + esc(r.id) + '">Dismiss</button>') +
+      (r.status === "NEW" ? '<button class="btn" data-act="fsave" data-id="' + esc(r.id) + '">Save</button>' : "") +
+      (r.status === "PIPELINED" ? "" : '<button class="btn primary" data-act="fpipe" data-id="' + esc(r.id) + '">Add to pipeline</button>') + "</div></div>", true);
+  }
+  function fAction(kind, id) {
+    var map = { fpipe: ["pipeline", "Added to your pipeline (New)"], fsave: ["save", "Saved"], fdismiss: ["dismiss", "Dismissed"] };
+    api("/api/lead-finder/leads/" + encodeURIComponent(id) + "/" + map[kind][0], { method: "POST" }).then(function () {
+      closeModal(); toast(map[kind][1], "ok"); loadSearch(); if (kind === "fpipe") refresh();
+    }).catch(function (e) { toast(e.message, "bad"); });
+  }
+  function savedAction(kind, id) {
+    if (kind === "sopen") { F.searchId = id; $("frStatus").value = ""; startFinderPoll(); api("/api/lead-finder/seen", { method: "POST" }).then(loadSaved); return; }
+    if (kind === "srun") return api("/api/lead-finder/saved-searches/" + encodeURIComponent(id) + "/run", { method: "POST" }).then(function () { toast("Search started", "ok"); F.searchId = id; startFinderPoll(); loadSaved(); }).catch(function (e) { toast(e.message, "bad"); });
+    api("/api/lead-finder/saved-searches/" + encodeURIComponent(id), { method: "DELETE" }).then(function () { toast("Saved search removed", "ok"); loadSaved(); }).catch(function (e) { toast(e.message, "bad"); });
+  }
+  document.querySelector(".tabs").addEventListener("click", function (e) { var b = e.target.closest("[data-tab]"); if (b) setTab(b.getAttribute("data-tab")); });
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-act]"); if (!el) return; var a = el.getAttribute("data-act"), id = el.getAttribute("data-id");
+    if (a === "kwdel") { F.kws.splice(Number(el.getAttribute("data-i")), 1); renderKws(); }
+    else if (a === "fdetail") fdetail(id);
+    else if (a === "fpipe" || a === "fsave" || a === "fdismiss") fAction(a, id);
+    else if (a === "sopen" || a === "srun" || a === "sdel") savedAction(a, id);
+  });
+  setInterval(function () { if (F.on && !document.hidden) { pollSummary(); if (F.tab === "finder" && !state.busy) loadSaved().catch(function () {}); } }, 4000);
 
   /* ---------- events ---------- */
   document.addEventListener("click", function (e) {

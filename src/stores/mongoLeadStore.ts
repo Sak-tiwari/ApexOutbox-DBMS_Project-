@@ -73,8 +73,19 @@ export class MongoLeadStore implements LeadStore {
   }
 
   async create(l: NewLead) {
-    const doc = await Lead.create({ name: l.name, company: l.company, ownerId: l.ownerId, ...(l.followUpDate ? { followUpDate: l.followUpDate } : {}) });
-    return toRecord(doc.toObject());
+    try {
+      const doc = await Lead.create({
+        name: l.name, company: l.company, ownerId: l.ownerId, ...(l.followUpDate ? { followUpDate: l.followUpDate } : {}),
+        ...(l.website ? { website: l.website } : {}), ...(l.source ? { source: l.source } : {}), ...(l.dedupeKey ? { dedupeKey: l.dedupeKey } : {}),
+      });
+      return toRecord(doc.toObject());
+    } catch (error) {
+      if (l.dedupeKey && (error as { code?: number }).code === 11000) {
+        const existing = await Lead.findOne({ dedupeKey: l.dedupeKey }).lean();
+        if (existing) return toRecord(existing);
+      }
+      throw error;
+    }
   }
 
   async upsertScraped(l: ScrapedLead) {

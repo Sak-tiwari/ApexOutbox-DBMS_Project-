@@ -22,6 +22,9 @@ const schema = z
     // Requests per minute per client IP on /api (0 disables). Per process; see src/middleware/rateLimit.ts.
     // Lets the scraper fetch the bundled demo pages on this machine (http://127.0.0.1/demo/...). Only those
     // pages; other local addresses stay blocked. On by default outside production.
+    // Lead Finder: sample data instead of the live sites (for demos), and a comma list of source ids to switch off.
+    LEAD_FINDER_MOCK: z.enum(["true", "false"]).default("false"),
+    LEAD_FINDER_DISABLED_SOURCES: z.string().default(""),
     SCRAPER_ALLOW_LOOPBACK: z.enum(["true", "false"]).optional(),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(0).default(300),
   })
@@ -38,7 +41,7 @@ const schema = z
     }
   });
 
-export type Config = z.infer<typeof schema> & { scraperAllowLoopback: boolean };
+export type Config = z.infer<typeof schema> & { scraperAllowLoopback: boolean; leadFinderMock: boolean; leadFinderDisabledSources: string[] };
 
 export function parseConfig(source: Record<string, string | undefined> = process.env): Config {
   const result = schema.safeParse(source);
@@ -47,7 +50,7 @@ export function parseConfig(source: Record<string, string | undefined> = process
     throw new Error(`Invalid configuration:\n${lines.join("\n")}`);
   }
   const d = result.data;
-  return { ...d, scraperAllowLoopback: d.SCRAPER_ALLOW_LOOPBACK ? d.SCRAPER_ALLOW_LOOPBACK === "true" : d.NODE_ENV !== "production" };
+  return { ...d, leadFinderMock: d.LEAD_FINDER_MOCK === "true", leadFinderDisabledSources: d.LEAD_FINDER_DISABLED_SOURCES.split(",").map((x) => x.trim()).filter(Boolean), scraperAllowLoopback: d.SCRAPER_ALLOW_LOOPBACK ? d.SCRAPER_ALLOW_LOOPBACK === "true" : d.NODE_ENV !== "production" };
 }
 
 /** Parses "key:user,key2:user2" into a map. Keys shorter than 16 chars are rejected as guessable. */

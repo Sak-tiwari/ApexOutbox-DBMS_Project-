@@ -16,6 +16,10 @@ import { InvoiceNotFoundError, processInvoiceJob } from "./phase4/processor";
 import { QUEUE_NAME, createQueueClient } from "./phase4/queue";
 import { requeueStuckInvoices } from "./phase4/requeue";
 import { MongoScrapeJobStore } from "./scraper/jobs";
+import { createHttp } from "./leadFinder/http";
+import { runSearch } from "./leadFinder/runSearch";
+import { activeSources } from "./leadFinder/sources";
+import { LeadFinderStore } from "./leadFinder/store";
 import { processScrapeJob } from "./scraper/processor";
 import { scrapePage } from "./scraper/scrapePage";
 
@@ -28,6 +32,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  *   3. reconciler         - retries Closed-Won leads whose onboarding hand-off did not finish
  *   4. requeue sweep      - re-creates queue jobs for unsent invoices if Redis lost them
  *   5. scraper loop       - takes queued website scrapes (Crawlee) and turns them into leads
+ *   6. lead finder loop   - runs queued Lead Finder searches and re-queues due saved searches
  */
 async function main() {
   const config = parseConfig();
@@ -40,6 +45,7 @@ async function main() {
   const outboxStore = new MongoOutboxStore();
   const leads = new MongoLeadStore();
   const scrapeJobs = new MongoScrapeJobStore();
+  const finder = new LeadFinderStore();
 
   const worker = new Worker(
     QUEUE_NAME,
@@ -126,6 +132,32 @@ async function main() {
     }
   })();
 
+  // Lead Finder: runs queued searches (one at a time) and puts due saved searches back in the queue.
+  const finderLoop = (async () => {
+    const http = createHttp();
+    const sources = activeSources({ mock: config.leadFinderMock, disabled: config.leadFinderDisabledSources });
+    let lastSweep = 0;
+    while (!stopping) {
+      try {
+        if (Date.now() - lastSweep > 60_000) {
+          lastSweep = Date.now();
+          const due = await finder.queueDue();
+          if (due) log.info({ due }, "saved lead searches queued");
+          await finder.recoverStale(10 * 60_000);
+        }
+        const search = await finder.claimNext();
+        if (!search) {
+          await sleep(1500);
+          continue;
+        }
+        await runSearch(search, { store: finder, sources, http, log });
+      } catch (error) {
+        log.error({ error: String(error) }, "lead finder loop error");
+        await sleep(3000);
+      }
+    }
+  })();
+
   // Liveness signal for the container healthcheck: only refreshed while the loops are actually running
   // and MongoDB is connected, so a wedged or disconnected worker becomes "unhealthy".
   const HEARTBEAT = process.env.WORKER_HEARTBEAT_FILE || "/tmp/worker-heartbeat";
@@ -143,7 +175,7 @@ async function main() {
     stopping = true;
     clearInterval(heartbeat);
     await worker.close();
-    await Promise.race([Promise.all([dispatchLoop, reconcileLoop, requeueLoop, scrapeLoop]), sleep(5000)]);
+    await Promise.race([Promise.all([dispatchLoop, reconcileLoop, requeueLoop, scrapeLoop, finderLoop]), sleep(5000)]);
     await queue.close();
     workerConnection.disconnect();
     await mongoose.disconnect();

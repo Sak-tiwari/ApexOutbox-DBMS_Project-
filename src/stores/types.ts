@@ -37,6 +37,10 @@ export interface NewLead {
   company: string;
   ownerId: string;
   followUpDate?: Date;
+  /** Where the lead came from (e.g. a Lead Finder post). dedupeKey makes creating it twice a no-op. */
+  website?: string;
+  source?: string;
+  dedupeKey?: string;
 }
 
 export interface ScrapedLead {

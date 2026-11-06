@@ -14,6 +14,8 @@ import { Lead } from "./models/Lead";
 import path from "node:path";
 import { MongoInvoiceReader } from "./phase4/mongoStores";
 import { MongoScrapeJobStore, ScrapeJob } from "./scraper/jobs";
+import { LeadFinderStore } from "./leadFinder/store";
+import { activeSources } from "./leadFinder/sources";
 
 async function startServer() {
     const config = parseConfig();
@@ -37,6 +39,7 @@ async function startServer() {
         invoiceDir: config.INVOICE_DIR,
         emailMode: config.SMTP_HOST ? "smtp" : "demo",
         scrapeJobs: new MongoScrapeJobStore(),
+        leadFinder: { store: new LeadFinderStore(), sources: activeSources({ mock: config.leadFinderMock, disabled: config.leadFinderDisabledSources }), mock: config.leadFinderMock },
         scraperSafeUrl: { allowLoopback: config.scraperAllowLoopback },
         // src/ (tsx) and dist/ (build) are both one level below the project root.
         publicDir: path.resolve(__dirname, "..", "public"),

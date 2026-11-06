@@ -91,3 +91,17 @@ will on the first push; check its result.
 | Browser | 32 checks including: scrape a demo page, lead appears with its emails, repeat scrape adds nothing, robots refusal, internal address refused, scraped lead taken to Closed-Won with the scraped email pre-filled, invoice + PDF + email sent. |
 
 Not tested: the public internet (the sandbox only reaches an allow-list), JavaScript-rendered sites (not supported: plain HTML only), DNS rebinding between the safety check and the fetch (a known limit of checking before fetching).
+
+
+## Lead Finder
+
+| Area | Evidence |
+|---|---|
+| Scoring, keywords, filters, de-duplication key, budget parsing | 21 unit tests (whole-word matching, freshness, regex characters, plurals, synonym map). |
+| Sources and HTTP hygiene | 14 unit tests: each source parsed from its real response shape; retries with backoff, 401/403/429 = blocked and not retried, cache + expiry, per-host spacing, size cap, user agent. |
+| Search flow on MongoDB | 31 tests: profile, validation, auto/manual, filters and sorting, re-run never duplicates (unique index), a blocked/crashing/hanging source does not fail the search, all-fail = FAILED with reason, same request on two platforms = one row, saved searches, scheduler, unseen badge, stale-run recovery, per-user limit. |
+| Tenant isolation | Two users, same external post = two separate rows; every read/write of the other user's ids answers 404; malformed ids 404 not 500. |
+| Add to pipeline | Creates a `New` lead with the post link and source, safe to click twice (one lead), and the lead can then be moved through the normal pipeline. |
+| Browser | 50 checks in total including the whole Lead Finder flow and a mobile layout check. |
+
+Not tested: the live sites (the test sandbox only reaches an allow-list). The live source modules are tested against copies of their documented response formats; Reddit in particular often answers 403 to unauthenticated requests from some networks, which the UI shows as "blocked".

@@ -179,6 +179,88 @@ const check = (name, ok, extra = "") => { results.push(ok); console.log(`${ok ? 
   check("full chain: scraped lead -> Closed-Won -> invoice + PDF -> email sent to the scraped address", true);
   await page.screenshot({ path: `${SHOTS}/7-scraped-to-invoice.png`, fullPage: true });
 
+  // ---- Lead Finder (needs LEAD_FINDER_MOCK=true on the server) ----
+  await page.waitForSelector("#tabs:not([hidden])");
+  check("Lead Finder tab exists and the badge is hidden", (await page.locator("#finderBadge").isHidden()));
+  await page.click('[data-tab="finder"]');
+  await page.waitForSelector("#viewFinder:not([hidden])");
+  check("demo-mode banner is shown", await page.isVisible("#fMock"));
+  await page.click("#fGo");
+  await page.waitForFunction(() => /Describe your business/.test(document.getElementById("fErr").textContent));
+  check("auto search without a profile is refused with a clear message", true);
+
+  await page.fill("#fpText", "We build websites for small businesses: React, WordPress, Shopify");
+  await page.click("#fpSuggest");
+  await page.waitForSelector("#fpKws .kw");
+  const kwCount = await page.locator("#fpKws .kw").count();
+  check("keywords are suggested from the description", kwCount >= 6 && /website/.test(await page.textContent("#fpKws")));
+  await page.locator("#fpKws .kw button").last().click();
+  await page.fill("#fpAdd", "figma"); await page.press("#fpAdd", "Enter");
+  check("keywords can be removed and added", (await page.locator("#fpKws .kw").count()) === kwCount && /figma/.test(await page.textContent("#fpKws")));
+  await page.click("#fpSave");
+  await page.waitForFunction(() => /profile saved/i.test(document.getElementById("toasts").textContent));
+  check("service profile saves", true);
+
+  await page.click("#fGo");
+  await page.waitForFunction(() => /Sample data/.test(document.getElementById("fSrcs").textContent) && /done/.test(document.getElementById("fSrcs").textContent), null, { timeout: 30000 });
+  await page.waitForSelector("#frBody tr .score");
+  const scores = await page.$$eval("#frBody .score", (els) => els.map((e) => Number(e.textContent)));
+  check("auto search shows scored results, best match first", scores.length >= 5 && scores.every((v, i) => i === 0 || scores[i - 1] >= v), scores.join(","));
+  await page.screenshot({ path: `${SHOTS}/8-lead-finder.png`, fullPage: true });
+
+  await page.click("#fmManual");
+  await page.fill("#fQuery", "logo");
+  await page.click("#fGo");
+  await page.waitForFunction(() => /logo/i.test(document.getElementById("frBody").textContent) && !/Searching/.test(document.getElementById("frBody").textContent), null, { timeout: 30000 });
+  check("manual search for 'logo' finds the logo request", /Logo and brand identity/.test(await page.textContent("#frBody")));
+  const n1 = await page.locator("#frBody tr .score").count();
+  await page.selectOption("#frScore", "80");
+  await page.waitForFunction((n) => document.querySelectorAll("#frBody tr .score").length < n || /No matching/.test(document.getElementById("frBody").textContent), n1);
+  check("minimum-score filter narrows the results", true);
+  await page.selectOption("#frScore", "0");
+
+  await page.click("#fmAuto");
+  await page.click("#fGo");
+  await page.waitForSelector('#frBody [data-act="fdetail"]');
+  await page.locator('#frBody [data-act="fdetail"]').first().click();
+  await page.waitForSelector(".drawer");
+  check("detail drawer shows the post link and how to contact", /Through the original post/.test(await page.textContent(".drawer")) && (await page.locator('.drawer a[target=_blank]').count()) >= 1);
+  const title = (await page.textContent(".modal header h2")).trim();
+  await page.click('.modal [data-act="fpipe"]');
+  await page.waitForFunction(() => /Added to your pipeline/.test(document.getElementById("toasts").textContent));
+  await page.click('[data-tab="pipeline"]');
+  await page.waitForSelector('.col[data-state="New"] .card:has-text("From Lead Finder")');
+  check("Add to pipeline creates a New lead marked 'From Lead Finder' with the post link", (await page.locator('.col[data-state="New"] .card', { hasText: title.slice(0, 25) }).count()) >= 1);
+  await page.click('[data-tab="finder"]');
+  await page.waitForSelector("#frBody .chip.ok");
+  check("the result now shows 'In pipeline'", /In pipeline/.test(await page.textContent("#frBody")));
+
+  await page.locator('#frBody [data-act="fdetail"]').nth(1).click();
+  const dismissed = (await page.textContent(".modal header h2")).trim();
+  await page.click('.modal [data-act="fdismiss"]');
+  await page.waitForFunction((t) => !document.getElementById("frBody").textContent.includes(t), dismissed);
+  check("Dismiss removes a request from the list", true);
+
+  await page.click("#fFilters summary");
+  await page.check("#fSave"); await page.fill("#fName", "Web client hunt"); await page.selectOption("#fEvery", "6");
+  await page.click("#fGo");
+  await page.waitForSelector('#fSaved .nm:has-text("Web client hunt")');
+  check("a saved search appears in the Saved searches list", true);
+  await page.waitForFunction(() => /results/.test(document.getElementById("fSaved").textContent));
+  await page.locator('#fSaved [data-act="srun"]').first().click();
+  await page.waitForFunction(() => /Search started/.test(document.getElementById("toasts").textContent));
+  check("Run now re-runs a saved search", true);
+  await page.screenshot({ path: `${SHOTS}/9-lead-finder-saved.png`, fullPage: true });
+  await page.locator('#fSaved [data-act="sdel"]').first().click();
+  await page.waitForFunction(() => !/Web client hunt/.test(document.getElementById("fSaved").textContent));
+  check("a saved search can be removed", true);
+
+  const fm = await ctx.newPage(); await fm.setViewportSize({ width: 390, height: 844 });
+  await fm.goto(BASE); await fm.waitForSelector("#app:not([hidden])"); await fm.click('[data-tab="finder"]'); await fm.waitForSelector("#viewFinder:not([hidden])");
+  check("mobile: Lead Finder does not scroll the page sideways", !(await fm.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
+  await fm.screenshot({ path: `${SHOTS}/10-lead-finder-mobile.png` });
+  await fm.close();
+
   // key is remembered across reload
   await page.reload();
   await page.waitForSelector("#app:not([hidden])");

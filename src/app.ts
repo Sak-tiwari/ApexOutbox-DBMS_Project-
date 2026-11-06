@@ -8,6 +8,9 @@ import path from 'node:path';
 import { createOnboardingRouter } from './phase4/api';
 import { ALLOWED_TRANSITIONS } from './services/TransitionService';
 import { createInvoiceRouter, type InvoiceReader } from './routes/invoiceRoutes';
+import { createLeadFinderRouter } from './routes/leadFinderRoutes';
+import type { LeadFinderStore } from './leadFinder/store';
+import type { LeadSource } from './leadFinder/types';
 import { createScrapeRouter } from './routes/scrapeRoutes';
 import type { ScrapeJobStore } from './scraper/jobs';
 import type { SafeUrlOptions } from './scraper/safeUrl';
@@ -34,6 +37,8 @@ export interface AppDeps extends LeadRouterDeps {
   /** Enables POST/GET /api/scrape-jobs (the worker does the scraping). */
   scrapeJobs?: ScrapeJobStore;
   scraperSafeUrl?: SafeUrlOptions;
+  /** Enables /api/lead-finder. `sources` is only used to list the platforms; the worker runs the searches. */
+  leadFinder?: { store: LeadFinderStore; sources: LeadSource[]; mock: boolean };
 }
 
 async function probe(fn: () => Promise<boolean> | boolean): Promise<boolean> {
@@ -100,9 +105,10 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api', rateLimit({ limit: deps.rateLimitPerMinute ?? 0 }));
   app.use('/api/leads', auth, createLeadRouter(deps));
   app.get('/api/meta', auth, (_req, res) => {
-    res.json({ success: true, data: { transitions: ALLOWED_TRANSITIONS, reasonRequiredFrom: ['Closed-Won', 'Closed-Lost'], emailMode: deps.emailMode ?? 'demo', scraper: Boolean(deps.scrapeJobs), demoPages: Boolean(deps.scraperSafeUrl?.allowLoopback) } });
+    res.json({ success: true, data: { transitions: ALLOWED_TRANSITIONS, reasonRequiredFrom: ['Closed-Won', 'Closed-Lost'], emailMode: deps.emailMode ?? 'demo', scraper: Boolean(deps.scrapeJobs), leadFinder: Boolean(deps.leadFinder), leadFinderMock: Boolean(deps.leadFinder?.mock), demoPages: Boolean(deps.scraperSafeUrl?.allowLoopback) } });
   });
   if (deps.scrapeJobs) app.use('/api/scrape-jobs', auth, createScrapeRouter({ jobs: deps.scrapeJobs, safeUrl: deps.scraperSafeUrl ?? {} }));
+  if (deps.leadFinder) app.use('/api/lead-finder', auth, createLeadFinderRouter({ ...deps.leadFinder, leads: deps.leads }));
   if (deps.invoices) app.use('/api/invoices', auth, createInvoiceRouter({ invoices: deps.invoices, invoiceDir: deps.invoiceDir ?? 'generated-invoices' }));
   app.use('/api/phase4', auth, createOnboardingRouter());
 
