@@ -11,14 +11,14 @@ export const PLACEHOLDERS: Array<{ group: string; fields: Array<{ path: string; 
   ] },
   { group: "Invoice", fields: [
     { path: "invoice.number", note: "Invoice number (required)" }, { path: "invoice.date", note: "Invoice date" }, { path: "invoice.due_date", note: "Due date" },
-    { path: "invoice.currency", note: "Currency code, e.g. INR" }, { path: "invoice.status", note: "Status" }, { path: "invoice.notes", note: "Notes" },
+    { path: "invoice.currency", note: "Currency code, e.g. INR" }, { path: "invoice.status", note: "Status" }, { path: "invoice.is_paid", note: "True when the status is Paid (for {{#if}})" }, { path: "invoice.notes", note: "Notes" },
   ] },
   { group: "Items loop: {{#each items}} ... {{/each}}", fields: [
     { path: "items[].no", note: "Line number 1, 2, 3..." }, { path: "items[].description", note: "Description" }, { path: "items[].qty", note: "Quantity" },
     { path: "items[].rate", note: "Rate" }, { path: "items[].tax_rate", note: "GST rate, e.g. 18%" }, { path: "items[].amount", note: "Line amount" },
   ] },
   { group: "Totals", fields: [
-    { path: "totals.subtotal", note: "Before tax" }, { path: "totals.discount", note: "Discount" }, { path: "totals.cgst", note: "CGST (same state)" },
+    { path: "totals.subtotal", note: "Before tax" }, { path: "totals.discount", note: "Discount" }, { path: "totals.has_discount", note: "True when a discount applies (for {{#if}})" }, { path: "totals.cgst", note: "CGST (same state)" },
     { path: "totals.sgst", note: "SGST (same state)" }, { path: "totals.igst", note: "IGST (other state)" }, { path: "totals.total", note: "Total (required)" },
     { path: "totals.amount_in_words", note: "e.g. One Lakh Eighteen Thousand Rupees Only" },
   ] },

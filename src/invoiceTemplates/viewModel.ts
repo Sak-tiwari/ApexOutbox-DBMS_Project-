@@ -27,9 +27,9 @@ export function buildViewData(s: InvoiceSnapshot, opts: { number: string; status
   return {
     business: { name: b?.name ?? "", logo: opts.images?.logo ?? "", address: b?.address ?? "", gstin: b?.gstin ?? "", state: b?.state ?? "", email: b?.email ?? "", phone: b?.phone ?? "" },
     client: { name: s.clientName, company: s.company ?? "", address: s.clientAddress ?? "", gstin: s.clientGstin ?? "", state: s.clientState ?? b?.state ?? "", email: s.email },
-    invoice: { number: s.displayNumber || opts.number, date: fmtDate(s.createdAt), due_date: fmtDate(s.dueDate), currency, status: opts.status ?? "", notes: "" },
+    invoice: { number: s.displayNumber || opts.number, date: fmtDate(s.createdAt), due_date: fmtDate(s.dueDate), currency, status: opts.status ?? "", is_paid: /^paid$/i.test(opts.status ?? ""), notes: "" },
     items: items.map((i, idx) => ({ no: idx + 1, description: i.description, qty: String(i.qty), rate: m(i.rate), tax_rate: pct(i.taxRate), amount: m(i.amount) })),
-    totals: { subtotal: m(totals.subtotal), discount: m(totals.discount), cgst: m(totals.cgst), sgst: m(totals.sgst), igst: m(totals.igst), total: m(totals.total), amount_in_words: amountInWords(totals.total, currency) },
+    totals: { subtotal: m(totals.subtotal), discount: m(totals.discount), cgst: m(totals.cgst), sgst: m(totals.sgst), igst: m(totals.igst), total: m(totals.total), amount_in_words: amountInWords(totals.total, currency), has_discount: totals.discount > 0 },
     tax: { is_intra: intra, is_inter: inter, rate: pct(rate), cgst_rate: pct(intra ? rate / 2 : 0), sgst_rate: pct(intra ? rate / 2 : 0), igst_rate: pct(inter ? rate : 0), label: intra ? "CGST + SGST" : inter ? "IGST" : "No GST" },
     payment: { bank_name: b?.bankName ?? "", account: b?.account ?? "", ifsc: b?.ifsc ?? "", upi_id: b?.upiId ?? "", qr: opts.images?.qr ?? "", link: b?.paymentLink ?? "", has_bank: !!(b?.bankName && b?.account) },
     brand: { color: brand.color, font: brand.font },

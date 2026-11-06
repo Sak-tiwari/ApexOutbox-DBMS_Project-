@@ -1,0 +1,25 @@
+{
+  "displayNumber": "TL/2026/0007",
+  "clientName": "Rohan Mehta",
+  "company": "Brightpath Learning Pvt Ltd",
+  "email": "accounts@brightpath.example",
+  "clientAddress": "21, Residency Road, Bengaluru, Karnataka 560025",
+  "clientState": "Karnataka",
+  "clientGstin": "29AABCB1234C1Z6",
+  "currency": "INR",
+  "description": "Website development project",
+  "amount": 118000,
+  "gstRate": 18,
+  "createdAt": "2026-11-06T00:00:00.000Z",
+  "dueDate": "2026-11-21T00:00:00.000Z",
+  "business": {
+    "name": "Technolites IT Pvt. Ltd.", "address": "Sector 62, Noida, Uttar Pradesh 201309", "gstin": "09AAECT1234F1Z5", "state": "Uttar Pradesh",
+    "email": "billing@technolites.example", "phone": "+91 98765 43210", "logoAssetId": "", "bankName": "", "account": "", "ifsc": "",
+    "upiId": "saksham.tiwari.1@superyes", "paymentLink": "", "qrAssetId": "", "terms": ""
+  },
+  "items": [
+    { "description": "Website design and UI/UX (8 pages, responsive)", "qty": 1, "rate": 40000, "taxRate": 18, "amount": 40000 },
+    { "description": "Frontend and backend development, CMS integration", "qty": 1, "rate": 45000, "taxRate": 18, "amount": 45000 },
+    { "description": "SEO setup, hosting configuration and deployment", "qty": 1, "rate": 15000, "taxRate": 18, "amount": 15000 }
+  ]
+}
