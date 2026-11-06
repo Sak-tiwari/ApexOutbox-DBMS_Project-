@@ -9,7 +9,10 @@ import { MongoLeadStore } from "./stores/mongoLeadStore";
 import { reconcileOnboarding } from "./services/onboardingHandoff";
 import { onboardClient } from "./phase4/onboardingService";
 import { dispatchOnce } from "./phase4/dispatcherCore";
-import { generateInvoicePDF } from "./phase4/invoice";
+import path from "node:path";
+import { generateInvoicePdfWithTemplate } from "./invoiceTemplates/invoicePdf";
+import { closeRenderer } from "./invoiceTemplates/renderer";
+import { InvoiceTemplateStore } from "./invoiceTemplates/store";
 import { sendInvoiceEmail } from "./phase4/email";
 import { MongoInvoiceStore, MongoOutboxStore } from "./phase4/mongoStores";
 import { InvoiceNotFoundError, processInvoiceJob } from "./phase4/processor";
@@ -46,6 +49,7 @@ async function main() {
   const leads = new MongoLeadStore();
   const scrapeJobs = new MongoScrapeJobStore();
   const finder = new LeadFinderStore();
+  const templateStore = new InvoiceTemplateStore(path.join(config.INVOICE_DIR, "assets"));
 
   const worker = new Worker(
     QUEUE_NAME,
@@ -53,7 +57,7 @@ async function main() {
       try {
         return await processInvoiceJob(job.data.invoiceId, {
           store: invoiceStore,
-          generatePdf: (n, s) => generateInvoicePDF(n, s, config.INVOICE_DIR),
+          generatePdf: async (n, s) => (await generateInvoicePdfWithTemplate(n, s, { store: templateStore, invoiceDir: config.INVOICE_DIR, log })).path,
           sendEmail: (d) => sendInvoiceEmail(d, { env: { ...process.env, NODE_ENV: config.NODE_ENV } }),
           log,
         });
@@ -177,6 +181,7 @@ async function main() {
     await worker.close();
     await Promise.race([Promise.all([dispatchLoop, reconcileLoop, requeueLoop, scrapeLoop, finderLoop]), sleep(5000)]);
     await queue.close();
+    await closeRenderer();
     workerConnection.disconnect();
     await mongoose.disconnect();
     process.exit(0);

@@ -10,11 +10,15 @@ RUN npm run build
 # ---- runtime stage: production dependencies + compiled code, non-root ----
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
+# Chromium renders invoice templates to PDF (JavaScript off, network blocked; see src/invoiceTemplates/renderer.ts)
+RUN apk add --no-cache chromium nss freetype harfbuzz ttf-freefont font-noto
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY public ./public
+COPY templates ./templates
 COPY scripts ./scripts
 COPY THIRD_PARTY_NOTICES.md ./
 RUN mkdir -p /data/invoices && chown -R node:node /data /app

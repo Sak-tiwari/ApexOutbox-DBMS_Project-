@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Tax Invoice {{invoice.number}}</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  body { font-family: {{brand.font}}; font-size: 11px; color: #000; margin: 0; }
+  .frame { border: 1px solid #000; }
+  .title { text-align: center; font-size: 16px; font-weight: 700; padding: 6px; border-bottom: 1px solid #000; background: #f2f2f2; letter-spacing: .1em; }
+  .row { display: flex; border-bottom: 1px solid #000; } .row > div { flex: 1; padding: 6px 8px; } .row > div + div { border-left: 1px solid #000; }
+  .row img { max-height: 46px; float: right; }
+  b.k { display: inline-block; min-width: 92px; }
+  table { width: 100%; border-collapse: collapse; } th, td { border: 1px solid #000; padding: 5px 6px; } th { background: #f2f2f2; font-size: 10px; }
+  .n { text-align: right; white-space: nowrap; } .c { text-align: center; }
+  .noborder td { border: 0; }
+  .sign { text-align: right; padding: 26px 8px 8px; }
+</style></head>
+<body><div class="frame">
+  <div class="title">TAX INVOICE</div>
+  <div class="row">
+    <div>{{#if business.logo}}<img src="{{business.logo}}" alt="">{{/if}}<b style="font-size:13px">{{business.name}}</b><br>{{business.address}}<br>
+      <b class="k">GSTIN</b>{{business.gstin}}<br><b class="k">State</b>{{business.state}}<br>{{business.email}} {{business.phone}}</div>
+    <div><b class="k">Invoice No.</b>{{invoice.number}}<br><b class="k">Invoice Date</b>{{invoice.date}}<br>{{#if invoice.due_date}}<b class="k">Due Date</b>{{invoice.due_date}}<br>{{/if}}
+      <b class="k">Place of supply</b>{{client.state}}<br><b class="k">Tax type</b>{{tax.label}}</div>
+  </div>
+  <div class="row"><div><b>Bill to</b><br>{{client.name}}{{#if client.company}}, {{client.company}}{{/if}}<br>{{client.address}}<br><b class="k">GSTIN</b>{{client.gstin}}<br><b class="k">State</b>{{client.state}}<br>{{client.email}}</div></div>
+  <table>
+    <thead><tr><th class="c">#</th><th>Description of services</th>{{#if cols.qty}}<th class="n">Qty</th>{{/if}}{{#if cols.rate}}<th class="n">Rate</th>{{/if}}<th class="n">Taxable value</th>{{#if cols.tax}}<th class="n">GST %</th>{{/if}}</tr></thead>
+    <tbody>{{#each items}}<tr><td class="c">{{no}}</td><td>{{description}}</td>{{#if ../cols.qty}}<td class="n">{{qty}}</td>{{/if}}{{#if ../cols.rate}}<td class="n">{{rate}}</td>{{/if}}<td class="n">{{amount}}</td>{{#if ../cols.tax}}<td class="n">{{tax_rate}}</td>{{/if}}</tr>{{/each}}</tbody>
+  </table>
+  <div class="row" style="border-bottom:0">
+    <div><b>Amount in words</b><br>{{totals.amount_in_words}}<br><br>
+      {{#if payment.has_bank}}<b>Bank details</b><br>{{payment.bank_name}}<br>A/c No. {{payment.account}}<br>IFSC {{payment.ifsc}}<br>{{/if}}
+      {{#if payment.upi_id}}<b>UPI</b> {{payment.upi_id}}<br>{{/if}}{{#if payment.qr}}<img src="{{payment.qr}}" alt="" style="width:80px;height:80px;float:none">{{/if}}</div>
+    <div style="padding:0"><table class="noborder">
+      <tr><td>Taxable value</td><td class="n">{{totals.subtotal}}</td></tr>
+      <tr><td>CGST {{tax.cgst_rate}}</td><td class="n">{{totals.cgst}}</td></tr>
+      <tr><td>SGST {{tax.sgst_rate}}</td><td class="n">{{totals.sgst}}</td></tr>
+      <tr><td>IGST {{tax.igst_rate}}</td><td class="n">{{totals.igst}}</td></tr>
+      <tr><td style="border-top:1px solid #000"><b>Total</b></td><td class="n" style="border-top:1px solid #000"><b>{{totals.total}}</b></td></tr>
+    </table>
+    <div class="sign">For {{business.name}}<br><br><br>Authorised signatory</div></div>
+  </div>
+</div>
+{{#if doc.terms}}<p><b>Terms:</b> {{doc.terms}}</p>{{/if}}
+<p style="text-align:center;color:#555">{{doc.footer}}</p>
+</body></html>

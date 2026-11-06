@@ -5,7 +5,7 @@ import type { InvoiceSnapshot } from "./types";
 export interface ProcessorDeps {
   store: InvoiceStore;
   generatePdf: (invoiceNumber: string, snapshot: InvoiceSnapshot) => Promise<string>;
-  sendEmail: (d: { to: string; clientName: string; invoiceNumber: string; pdfPath: string }) => Promise<{ messageId: string; demo: boolean }>;
+  sendEmail: (d: { to: string; clientName: string; invoiceNumber: string; displayNumber?: string; pdfPath: string }) => Promise<{ messageId: string; demo: boolean }>;
   log: Log;
   now?: () => Date;
   /** An EMAIL_SENDING marker older than this means the worker died mid-send. Must exceed SMTP timeouts. */
@@ -80,6 +80,7 @@ export async function processInvoiceJob(invoiceId: string, deps: ProcessorDeps):
       to: claimed.snapshot.email,
       clientName: claimed.snapshot.clientName,
       invoiceNumber: claimed.invoiceNumber,
+      displayNumber: claimed.snapshot.displayNumber,
       pdfPath
     });
     await store.markSent(invoiceId, result.messageId);

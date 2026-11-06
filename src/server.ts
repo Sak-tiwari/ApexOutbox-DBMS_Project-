@@ -15,6 +15,9 @@ import path from "node:path";
 import { MongoInvoiceReader } from "./phase4/mongoStores";
 import { MongoScrapeJobStore, ScrapeJob } from "./scraper/jobs";
 import { LeadFinderStore } from "./leadFinder/store";
+import { MongoInvoiceAccess } from "./invoiceTemplates/invoiceAccess";
+import { closeRenderer } from "./invoiceTemplates/renderer";
+import { InvoiceTemplateStore } from "./invoiceTemplates/store";
 import { activeSources } from "./leadFinder/sources";
 
 async function startServer() {
@@ -26,6 +29,7 @@ async function startServer() {
 
     const queue = createQueueClient(config.REDIS_URL);
     const leads = new MongoLeadStore();
+    const templateStore = new InvoiceTemplateStore(path.join(config.INVOICE_DIR, "assets"));
 
     const app = createApp({
         leads,
@@ -39,6 +43,8 @@ async function startServer() {
         invoiceDir: config.INVOICE_DIR,
         emailMode: config.SMTP_HOST ? "smtp" : "demo",
         scrapeJobs: new MongoScrapeJobStore(),
+        invoiceTemplates: { store: templateStore, invoices: new MongoInvoiceAccess({ store: templateStore, invoiceDir: config.INVOICE_DIR, log }) },
+        invoiceNumberTaken: async (ownerId: string, n: string) => !!(await Invoice.exists({ ownerId, displayNumber: n })),
         leadFinder: { store: new LeadFinderStore(), sources: activeSources({ mock: config.leadFinderMock, disabled: config.leadFinderDisabledSources }), mock: config.leadFinderMock },
         scraperSafeUrl: { allowLoopback: config.scraperAllowLoopback },
         // src/ (tsx) and dist/ (build) are both one level below the project root.
@@ -67,6 +73,7 @@ async function startServer() {
         log.info({ signal }, "shutting down");
         server.close(async () => {
             await queue.close();
+            await closeRenderer();
             await mongoose.disconnect();
             process.exit(0);
         });

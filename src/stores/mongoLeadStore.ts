@@ -19,7 +19,10 @@ function toRecord(doc: any): LeadRecord {
       reason: a.reason,
       timestamp: a.timestamp,
     })),
-    deal: doc.deal ? { email: doc.deal.email, amount: doc.deal.amount, currency: doc.deal.currency, description: doc.deal.description } : undefined,
+    deal: doc.deal ? {
+      email: doc.deal.email, amount: doc.deal.amount, currency: doc.deal.currency, description: doc.deal.description,
+      ...Object.fromEntries(["invoiceNumber", "businessGstin", "clientGstin", "clientAddress", "clientState", "gstRate", "templateId"].filter((k) => doc.deal[k] !== undefined && doc.deal[k] !== null && doc.deal[k] !== "").map((k) => [k, doc.deal[k]])),
+    } : undefined,
     onboardingStatus: doc.onboardingStatus ?? undefined,
     onboardingAttempts: doc.onboardingAttempts ?? 0,
     onboardingError: doc.onboardingError ?? "",

@@ -7,6 +7,9 @@ import { NotFoundError, ValidationError } from '../errors';
 export interface InvoiceView {
   id: string;
   invoiceNumber: string;
+  /** Template version used for this invoice (null for invoices made before templates). */
+  templateVersionId?: string | null;
+  gst?: { mode: string; rate: number; tax: number } | null;
   leadId: string | null;
   status: string;
   clientName: string;

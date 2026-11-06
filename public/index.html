@@ -134,6 +134,38 @@ td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .drawer dl{display:grid;grid-template-columns:110px 1fr;gap:6px 10px;margin:0;font-size:14px} .drawer dt{color:var(--muted)} .drawer dd{margin:0;overflow-wrap:anywhere}
 @media (max-width:700px){.tabs{padding:0 8px}.tab{padding:12px 10px}}
 
+
+/* invoice templates */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-top:12px}
+.tcard{border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden;display:flex;flex-direction:column}
+.tcard.def{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft)}
+.thumb{height:240px;overflow:hidden;background:#f7f8fc;border-bottom:1px solid var(--line);position:relative}
+.thumb iframe{width:794px;height:1123px;border:0;transform:scale(.265);transform-origin:0 0;pointer-events:none;background:#fff}
+.tcard .meta{padding:10px 12px;display:grid;gap:4px} .tcard .meta b{font-size:14px;overflow-wrap:anywhere} .tcard .meta small{color:var(--muted);font-size:12px}
+.tcard .acts{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 12px}
+.drop{border:2px dashed #c5c8ff;border-radius:12px;padding:14px;text-align:center;color:var(--muted);font-size:13.5px;margin-top:10px;background:#fbfbff}
+.drop.over{background:var(--brand-soft);border-color:var(--brand);color:var(--brand)}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:10px}
+.bgrid label{font-size:12.5px} .imgrow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:13px}
+.imgrow img{max-height:48px;max-width:140px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.editor{position:fixed;inset:0;background:var(--bg);z-index:40;display:flex;flex-direction:column}
+.editor .ebar{display:flex;gap:8px;align-items:center;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.editor .ebar input{border:1px solid #cfd3e4;border-radius:9px;padding:8px 10px;font:inherit;min-width:180px;flex:1 1 200px;max-width:340px}
+.editor .split{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:0}
+.editor .left{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line);background:var(--surface)}
+.editor textarea.src{flex:1;border:0;resize:none;padding:12px;font:12.5px/1.5 ui-monospace,Menlo,Consolas,monospace;min-height:240px;outline:none;tab-size:2}
+.editor .right{display:flex;flex-direction:column;min-height:0}
+.editor .ptools{display:flex;gap:8px;align-items:center;padding:8px 12px;flex-wrap:wrap;font-size:13px}
+.editor .pframe{flex:1;margin:0 12px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;min-height:300px}
+.issues{margin:0;padding:6px 12px 8px 30px;font-size:13px;max-height:120px;overflow:auto}
+.issues li.e{color:var(--bad)} .issues li.w{color:var(--warn)}
+.ph{border-top:1px solid var(--line);max-height:34vh;overflow:auto;padding:8px 12px;font-size:12.5px}
+.ph h4{margin:8px 0 4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.ph button{all:unset;cursor:pointer;font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--brand-soft);color:var(--brand);border-radius:6px;padding:2px 6px;margin:2px;font-size:12px}
+.ph button:hover{background:#dfe2ff} .ph button:focus-visible{outline:2px solid var(--brand)}
+.bform{padding:12px;display:grid;gap:10px;overflow:auto} .bform .cols3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media (max-width:900px){.editor .split{grid-template-columns:1fr;overflow:auto}.editor .left{border-right:0;border-bottom:1px solid var(--line)}.editor .pframe{min-height:480px}}
+
 /* flow strip */
 .flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
 .flow i{font-style:normal;padding:2px 8px;border-radius:999px;background:#eceef6}
@@ -202,6 +234,7 @@ ol.hist li small{display:block;color:var(--muted)}
   <nav class="tabs" id="tabs" aria-label="Sections" hidden>
     <button class="tab on" data-tab="pipeline" aria-selected="true">Pipeline</button>
     <button class="tab" data-tab="finder" aria-selected="false">Lead Finder <span class="badge" id="finderBadge" hidden>0</span></button>
+    <button class="tab" data-tab="templates" aria-selected="false" hidden>Invoice Templates</button>
   </nav>
 
   <main id="viewPipeline">
@@ -232,6 +265,55 @@ ol.hist li small{display:block;color:var(--muted)}
           <tbody id="invBody"><tr><td colspan="5" class="empty">No invoices yet. Move a lead to Closed-Won to create one.</td></tr></tbody>
         </table>
       </div>
+    </section>
+  </main>
+
+  <main id="viewTemplates" hidden>
+    <details class="fcard" id="bizCard">
+      <summary style="cursor:pointer"><h2 style="display:inline">Your business details</h2> <span class="sub" style="color:var(--muted);font-size:13px">printed on every invoice (name, GSTIN, bank, UPI, logo)</span></summary>
+      <form id="fBiz">
+        <div class="bgrid">
+          <label>Business name<input name="name" maxlength="120"></label>
+          <label>GSTIN<input name="gstin" maxlength="15" placeholder="27ABCDE1234F1Z5" style="text-transform:uppercase"></label>
+          <label>State<select name="state" id="bizState"><option value="">Choose...</option></select></label>
+          <label>Default GST rate<select name="defaultGstRate"><option value="0">0% (no GST)</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option><option value="28">28%</option></select></label>
+          <label style="grid-column:1/-1">Address<input name="address" maxlength="500"></label>
+          <label>Email<input name="email" type="email" maxlength="200"></label>
+          <label>Phone<input name="phone" maxlength="30"></label>
+          <label>Bank name<input name="bankName" maxlength="80"></label>
+          <label>Account number<input name="account" maxlength="18" inputmode="numeric"></label>
+          <label>IFSC<input name="ifsc" maxlength="11" style="text-transform:uppercase"></label>
+          <label>UPI ID<input name="upiId" maxlength="60" placeholder="name@bank"></label>
+          <label>Payment link<input name="paymentLink" maxlength="300" placeholder="https://..."></label>
+          <label style="grid-column:1/-1">Terms<input name="terms" maxlength="1000" placeholder="Payment due within 15 days."></label>
+        </div>
+        <div class="imgrow">
+          <span>Logo: <img id="bizLogo" alt="" hidden> <input type="file" id="bizLogoFile" accept=".png,.jpg,.jpeg,.svg" aria-label="Upload logo"></span>
+          <span>Payment QR: <img id="bizQr" alt="" hidden> <input type="file" id="bizQrFile" accept=".png,.jpg,.jpeg,.svg" aria-label="Upload payment QR"></span>
+        </div>
+        <div class="actions" style="margin-top:10px"><button class="btn primary" type="submit">Save business details</button><span class="err" id="bizErr" role="alert"></span></div>
+      </form>
+    </details>
+
+    <section class="fcard" aria-labelledby="tlH">
+      <h2 id="tlH">Template library</h2>
+      <p class="sub">Every invoice uses your default template. Built-in templates cannot be changed: duplicate one to edit it.</p>
+      <div class="actions">
+        <button class="btn primary" type="button" id="tNewHtml">+ HTML template</button>
+        <button class="btn" type="button" id="tNewBuilder">+ Quick builder (no code)</button>
+        <label class="btn" style="display:inline-flex;cursor:pointer">Upload .html / .docx<input type="file" id="tFile" accept=".html,.htm,.docx" hidden></label>
+        <button class="btn" type="button" id="tExample">Download example template</button>
+      </div>
+      <div class="drop" id="tDrop">Drop an .html or .docx template here</div>
+      <div class="err" id="tErr" role="alert"></div>
+      <div class="tgrid" id="tGrid"><div class="empty">Loading templates...</div></div>
+    </section>
+
+    <section class="fcard" aria-labelledby="taH">
+      <h2 id="taH">Files for templates</h2>
+      <p class="sub">Upload images or fonts (PNG, JPG, SVG, WOFF2, max 5 MB) and use them in a template as <code>asset:name.png</code>.</p>
+      <div class="actions"><input type="file" id="aFile" accept=".png,.jpg,.jpeg,.svg,.woff2" aria-label="Upload a file"></div>
+      <ul class="saved" id="aList" style="margin-top:8px"></ul>
     </section>
   </main>
 
@@ -388,7 +470,8 @@ ol.hist li small{display:block;color:var(--muted)}
     if (meta.emailMode === "smtp") { mail.className = "pill up"; mail.innerHTML = '<span class="dot"></span>Email: live SMTP'; }
     else { mail.className = "pill demo"; mail.textContent = "Email: demo mode (nothing is really sent)"; }
     state.scraper = !!meta.scraper;
-    F.on = !!meta.leadFinder; $("tabs").hidden = !F.on; if (F.on) { pollSummary(); } setTab("pipeline");
+    F.on = !!meta.leadFinder; T.on = !!meta.invoiceTemplates; $("tabs").hidden = !(F.on || T.on);
+    document.querySelector('[data-tab="finder"]').hidden = !F.on; document.querySelector('[data-tab="templates"]').hidden = !T.on; if (F.on) { pollSummary(); } setTab("pipeline");
     $("scrapePanel").hidden = !state.scraper; $("demos").hidden = !meta.demoPages;
     $("gate").hidden = true; $("app").hidden = false;
     refresh(); startPolling();
@@ -486,7 +569,8 @@ ol.hist li small{display:block;color:var(--muted)}
       }).join("&rarr;") + "</div>";
       flow = '<div style="margin-bottom:5px">' + emailChip(inv) + "</div>" + flow;
       rows += "<tr><td class=\"mono\">" + esc(inv.invoiceNumber) + "</td><td>" + esc(inv.clientName) + "<div class=\"co\" style=\"color:var(--muted);font-size:12.5px\">" + esc(inv.email) + "</div></td><td class=\"num\">" + esc(money(inv.amount, inv.currency)) + "</td><td>" + flow + (inv.lastError && bad ? '<div class="err">' + esc(inv.lastError.slice(0, 120)) + "</div>" : "") + "</td><td>" +
-        (inv.hasPdf ? '<button class="btn small primary" data-act="pdf" data-id="' + esc(inv.id) + '">Open PDF</button>' : '<span class="chip">PDF pending</span>') + "</td></tr>";
+        (inv.hasPdf ? '<button class="btn small primary" data-act="pdf" data-id="' + esc(inv.id) + '">Open PDF</button>' : '<span class="chip">PDF pending</span>') +
+        (T.on && inv.hasPdf ? ' <button class="btn small" data-act="regen" data-id="' + esc(inv.id) + '">Regenerate</button>' : "") + (inv.gst ? '<div style="font-size:12px;color:var(--muted);margin-top:4px">' + (inv.gst.mode === "inter" ? "IGST " : "CGST+SGST ") + esc(inv.gst.rate) + "%</div>" : "") + "</td></tr>";
     });
     $("invBody").innerHTML = rows || '<tr><td colspan="5" class="empty">No invoices yet. Move a lead to Closed-Won to create one.</td></tr>';
   }
@@ -519,10 +603,29 @@ ol.hist li small{display:block;color:var(--muted)}
       '<div class="row2"><label>Amount<input name="amount" type="number" required min="0.01" step="0.01" value="4999.50"></label>' +
       '<label>Currency<select name="currency"><option>INR</option><option>USD</option><option>EUR</option><option>GBP</option></select></label></div>' +
       '<label>Invoice description<input name="description" required maxlength="500" value="Website project"></label>' +
+      (T.on ? '<details id="dInv" open><summary style="cursor:pointer;font-weight:600;font-size:13.5px">Invoice details (optional)</summary><div class="bgrid">' +
+        '<label>Invoice number<input name="invoiceNumber" maxlength="40" placeholder="Automatic if empty, e.g. INV/2026/001"></label>' +
+        '<label>Business GSTIN<input name="businessGstin" maxlength="15" placeholder="27ABCDE1234F1Z5" style="text-transform:uppercase"></label>' +
+        '<label>Client GSTIN<input name="clientGstin" maxlength="15" placeholder="optional" style="text-transform:uppercase"></label>' +
+        '<label>Client state<select name="clientState"><option value="">Same as my business / unknown</option></select></label>' +
+        '<label>GST rate<select name="gstRate"><option value="0">0% (no GST)</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option><option value="28">28%</option></select></label>' +
+        '<label>Template<select name="templateId"></select></label>' +
+        '<label style="grid-column:1/-1">Client address<input name="clientAddress" maxlength="500" placeholder="optional"></label></div></details>' : "") +
       '<div class="err" id="fErr" role="alert"></div><div class="foot"><button type="button" class="btn" data-act="close">Cancel</button><button class="btn primary" type="submit">Mark as won</button></div></form>');
+    if (T.on) (T.loaded ? Promise.resolve() : loadTemplates()).then(function () {
+      var f = $("fDeal"); if (!f || !T.meta) return;
+      f.elements.clientState.innerHTML = '<option value="">Same as my business / unknown</option>' + T.meta.states.map(function (x) { return "<option>" + esc(x) + "</option>"; }).join("");
+      f.elements.templateId.innerHTML = T.list.map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.isDefault ? " selected" : "") + ">" + esc(t.name) + (t.isDefault ? " (default)" : "") + "</option>"; }).join("");
+      if (T.business) { f.elements.businessGstin.value = T.business.gstin || ""; f.elements.gstRate.value = String(T.business.defaultGstRate || 0); }
+    });
     $("fDeal").addEventListener("submit", function (e) {
       e.preventDefault(); var fd = new FormData(e.target);
-      move(lead, "Closed-Won", null, { email: fd.get("email"), amount: Number(fd.get("amount")), currency: fd.get("currency"), description: fd.get("description") });
+      var deal = { email: fd.get("email"), amount: Number(fd.get("amount")), currency: fd.get("currency"), description: fd.get("description") };
+      if (T.on && e.target.elements.templateId) {
+        ["invoiceNumber", "businessGstin", "clientGstin", "clientState", "clientAddress", "templateId"].forEach(function (k) { var v = String(fd.get(k) || "").trim(); if (v) deal[k] = /Gstin$/.test(k) ? v.toUpperCase() : v; });
+        deal.gstRate = Number(fd.get("gstRate") || 0);
+      }
+      move(lead, "Closed-Won", null, deal);
     });
   }
 
@@ -598,7 +701,8 @@ ol.hist li small{display:block;color:var(--muted)}
 
   function setTab(t) {
     F.tab = t;
-    $("viewPipeline").hidden = t !== "pipeline"; $("viewFinder").hidden = t !== "finder";
+    $("viewPipeline").hidden = t !== "pipeline"; $("viewFinder").hidden = t !== "finder"; $("viewTemplates").hidden = t !== "templates";
+    if (t === "templates") loadTemplates();
     Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (b) { var on = b.getAttribute("data-tab") === t; b.classList.toggle("on", on); b.setAttribute("aria-selected", on ? "true" : "false"); });
     if (t === "finder") { loadFinder(); api("/api/lead-finder/seen", { method: "POST" }).then(function () { F.unseen = 0; renderBadge(); }).catch(function () {}); }
   }
@@ -755,6 +859,278 @@ ol.hist li small{display:block;color:var(--muted)}
     else if (a === "sopen" || a === "srun" || a === "sdel") savedAction(a, id);
   });
   setInterval(function () { if (F.on && !document.hidden) { pollSummary(); if (F.tab === "finder" && !state.busy) loadSaved().catch(function () {}); } }, 4000);
+
+  /* ---------- invoice templates ---------- */
+  var T = { on: false, meta: null, list: [], business: null, assets: [], invoices: [], thumbs: {}, loaded: false };
+  var TYPE_LABEL = { builtin: "Built-in", html: "HTML", docx: "Word", builder: "Builder" };
+  function tUrl(p) { return "/api/invoice-templates" + p; }
+  function readFileB64(file) {
+    return new Promise(function (ok, bad) {
+      if (file.size > 5 * 1024 * 1024) return bad(new Error("Files can be at most 5 MB"));
+      var r = new FileReader(); r.onload = function () { ok(String(r.result).split(",")[1] || ""); }; r.onerror = function () { bad(new Error("Could not read the file")); }; r.readAsDataURL(file);
+    });
+  }
+  function downloadFrom(path, fallbackName) {
+    return fetch(path, { headers: { Authorization: "Bearer " + state.key } }).then(function (res) {
+      if (!res.ok) throw new Error("Download failed (" + res.status + ")");
+      var m = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") || "");
+      return res.blob().then(function (b) { var a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = m ? m[1] : fallbackName; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 30000); });
+    }).catch(function (e) { toast(e.message, "bad"); });
+  }
+  function issuesHtml(list) {
+    if (!list || !list.length) return "";
+    return list.map(function (i) { return '<li class="' + (i.level === "warning" ? "w" : "e") + '">' + esc(i.message) + "</li>"; }).join("");
+  }
+  function errIssues(err) { return Array.isArray(err.details) && err.details.length && err.details[0].message && err.details[0].level ? err.details : [{ level: "error", message: err.message }]; }
+
+  function loadTemplates() {
+    var first = T.meta ? Promise.resolve() : api(tUrl("/placeholders")).then(function (r) { T.meta = r.data; fillBizStates(); });
+    return first.then(function () {
+      return Promise.all([api(tUrl("/")), api(tUrl("/business")), api(tUrl("/assets")), api(tUrl("/invoices/mine")).catch(function () { return { data: [] }; })]);
+    }).then(function (r) {
+      T.list = r[0].data; T.business = r[1].data; T.assets = r[2].data; T.invoices = r[3].data; T.loaded = true;
+      renderGrid(); renderAssets(); if (!T.bizFilled) fillBiz();
+    }).catch(function (e) { if (e.message !== "unauthorised") $("tErr").textContent = e.message; });
+  }
+
+  function renderGrid() {
+    $("tGrid").innerHTML = T.list.map(function (t) {
+      var acts = '<button class="btn small" data-act="tprev" data-id="' + esc(t.id) + '">Preview</button>' +
+        (t.builtin ? "" : '<button class="btn small primary" data-act="tedit" data-id="' + esc(t.id) + '">Edit</button>') +
+        (t.isDefault ? "" : '<button class="btn small" data-act="tdefault" data-id="' + esc(t.id) + '">Set as default</button>') +
+        '<button class="btn small" data-act="tdup" data-id="' + esc(t.id) + '">Duplicate</button>' +
+        (t.builtin ? "" : '<button class="btn small" data-act="trename" data-id="' + esc(t.id) + '">Rename</button><button class="btn small" data-act="tvers" data-id="' + esc(t.id) + '">Versions</button><button class="btn small" data-act="tdl" data-id="' + esc(t.id) + '">Download</button><button class="btn small" data-act="tdel" data-id="' + esc(t.id) + '">Delete</button>');
+      return '<div class="tcard' + (t.isDefault ? " def" : "") + '" data-tid="' + esc(t.id) + '"><div class="thumb"><iframe sandbox="" tabindex="-1" aria-hidden="true" title="" data-thumb="' + esc(t.id) + '"></iframe></div>' +
+        '<div class="meta"><b>' + esc(t.name) + (t.isDefault ? ' <span class="chip ok">Default</span>' : "") + "</b><small>" + esc(TYPE_LABEL[t.type] || t.type) + (t.builtin ? " &middot; " + esc(t.note || "") : " &middot; v" + t.currentVersion + " &middot; edited " + esc(ago(t.updatedAt))) + "</small></div>" +
+        '<div class="acts">' + acts + "</div></div>";
+    }).join("");
+    T.list.forEach(function (t) {
+      var frame = document.querySelector('[data-thumb="' + CSS.escape(t.id) + '"]'); if (!frame) return;
+      if (T.thumbs[t.currentVersionId]) { frame.srcdoc = T.thumbs[t.currentVersionId]; return; }
+      api(tUrl("/" + encodeURIComponent(t.id) + "/preview"), { method: "POST", body: {} }).then(function (r) { T.thumbs[t.currentVersionId] = r.data.html; frame.srcdoc = r.data.html; }).catch(function () {});
+    });
+  }
+
+  /* business details */
+  function fillBizStates() {
+    $("bizState").innerHTML = '<option value="">Choose...</option>' + T.meta.states.map(function (s) { return "<option>" + esc(s) + "</option>"; }).join("");
+  }
+  function fillBiz() {
+    var f = $("fBiz"), b = T.business; T.bizFilled = true;
+    ["name", "gstin", "state", "address", "email", "phone", "bankName", "account", "ifsc", "upiId", "paymentLink", "terms"].forEach(function (k) { f.elements[k].value = b[k] || ""; });
+    f.elements.defaultGstRate.value = String(b.defaultGstRate || 0);
+    showBizImg("bizLogo", b.logoAssetId); showBizImg("bizQr", b.qrAssetId);
+    if (!b.name) $("bizCard").open = true;
+  }
+  function showBizImg(id, assetId) {
+    var img = $(id); if (!assetId) { img.hidden = true; return; }
+    api(tUrl("/assets/" + encodeURIComponent(assetId))).then(function (r) { if (r.data.dataUri) { img.src = r.data.dataUri; img.hidden = false; } }).catch(function () { img.hidden = true; });
+  }
+  $("fBiz").addEventListener("submit", function (e) {
+    e.preventDefault(); $("bizErr").textContent = "";
+    var f = e.target, body = {};
+    ["name", "gstin", "state", "address", "email", "phone", "bankName", "account", "ifsc", "upiId", "paymentLink", "terms"].forEach(function (k) { body[k] = f.elements[k].value.trim(); });
+    body.defaultGstRate = Number(f.elements.defaultGstRate.value);
+    api(tUrl("/business"), { method: "PUT", body: body }).then(function (r) { T.business = r.data; T.thumbs = {}; toast("Business details saved", "ok"); renderGrid(); }).catch(function (err) { $("bizErr").textContent = err.message; });
+  });
+  function uploadBizImage(input, field) {
+    var file = input.files[0]; if (!file) return;
+    readFileB64(file).then(function (b64) { return api(tUrl("/assets"), { method: "POST", body: { name: field.replace("AssetId", "") + "-" + file.name, dataBase64: b64 } }); })
+      .then(function (a) { var body = {}; body[field] = a.data.id; return api(tUrl("/business"), { method: "PUT", body: body }); })
+      .then(function (r) { T.business = r.data; T.thumbs = {}; toast(field === "logoAssetId" ? "Logo saved" : "QR code saved", "ok"); showBizImg(field === "logoAssetId" ? "bizLogo" : "bizQr", r.data[field]); loadTemplates(); })
+      .catch(function (err) { $("bizErr").textContent = err.message; }).then(function () { input.value = ""; });
+  }
+  $("bizLogoFile").addEventListener("change", function (e) { uploadBizImage(e.target, "logoAssetId"); });
+  $("bizQrFile").addEventListener("change", function (e) { uploadBizImage(e.target, "qrAssetId"); });
+
+  /* assets */
+  function renderAssets() {
+    $("aList").innerHTML = T.assets.length ? T.assets.map(function (a) {
+      return '<li><span class="nm"><code>asset:' + esc(a.name) + "</code><small>" + esc(a.mime) + " &middot; " + Math.ceil(a.size / 1024) + ' KB</small></span><button class="btn small" data-act="acopy" data-name="' + esc(a.name) + '">Copy reference</button><button class="btn small" data-act="adel" data-id="' + esc(a.id) + '">Delete</button></li>';
+    }).join("") : '<li class="empty" style="border:0">No files yet.</li>';
+  }
+  $("aFile").addEventListener("change", function (e) {
+    var file = e.target.files[0]; if (!file) return;
+    readFileB64(file).then(function (b64) { return api(tUrl("/assets"), { method: "POST", body: { name: file.name, dataBase64: b64 } }); })
+      .then(function (r) { toast("Uploaded: use asset:" + r.data.name, "ok"); loadTemplates(); }).catch(function (err) { toast(err.message, "bad"); }).then(function () { e.target.value = ""; });
+  });
+
+  /* uploading a template file */
+  function uploadTemplateFile(file) {
+    $("tErr").textContent = "";
+    var isDocx = /\.docx$/i.test(file.name), isHtml = /\.html?$/i.test(file.name);
+    if (!isDocx && !isHtml) { $("tErr").textContent = "Upload an .html or .docx file"; return; }
+    var name = file.name.replace(/\.(docx|html?)$/i, "").slice(0, 80) || "My template";
+    readFileB64(file).then(function (b64) { return api(tUrl("/"), { method: "POST", body: isDocx ? { type: "docx", name: name, fileBase64: b64, fileName: file.name } : { type: "html", name: name, fileBase64: b64 } }); })
+      .then(function (r) {
+        toast("Template uploaded" + ((r.issues || []).some(function (i) { return i.level === "warning"; }) ? " (unsafe parts were removed)" : ""), "ok");
+        if (r.conversionWarnings && r.conversionWarnings.length) toast("Word layout was simplified in a few places", "");
+        return loadTemplates().then(function () { openEditorFor(r.data.id); });
+      })
+      .catch(function (err) { $("tErr").innerHTML = '<ul class="issues">' + issuesHtml(errIssues(err)) + "</ul>"; });
+  }
+  $("tFile").addEventListener("change", function (e) { if (e.target.files[0]) uploadTemplateFile(e.target.files[0]); e.target.value = ""; });
+  ["dragenter", "dragover"].forEach(function (ev) { $("tDrop").addEventListener(ev, function (e) { e.preventDefault(); $("tDrop").classList.add("over"); }); });
+  ["dragleave", "drop"].forEach(function (ev) { $("tDrop").addEventListener(ev, function (e) { e.preventDefault(); $("tDrop").classList.remove("over"); }); });
+  $("tDrop").addEventListener("drop", function (e) { var f = e.dataTransfer && e.dataTransfer.files[0]; if (f) uploadTemplateFile(f); });
+  $("tExample").addEventListener("click", function () { downloadFrom(tUrl("/example"), "apexoutbox-example-template.html"); });
+  $("tNewHtml").addEventListener("click", function () {
+    api(tUrl("/builtin:standard")).then(function (r) { openEditor({ mode: "html", name: "My template", source: r.data.version.source }); });
+  });
+  $("tNewBuilder").addEventListener("click", function () { openEditor({ mode: "builder", name: "My branded invoice", builder: null }); });
+
+  /* editor (split view) */
+  var E = null;
+  var DEFAULT_BUILDER = { layout: "builtin:standard", color: "#4f46e5", font: "system", showLogo: true, columns: { qty: true, rate: true, tax: true }, footer: "Thank you for your business.", terms: "", overrides: {} };
+  function openEditorFor(id) {
+    api(tUrl("/" + encodeURIComponent(id))).then(function (r) {
+      var t = r.data;
+      openEditor(t.type === "builder" ? { mode: "builder", id: t.id, name: t.name, builder: t.version.builder } : { mode: "html", id: t.id, name: t.name, source: t.version.source, type: t.type });
+    }).catch(function (e) { toast(e.message, "bad"); });
+  }
+  function phPanel() {
+    return '<div class="ph" aria-label="Placeholders"><b>Placeholders</b> <span style="color:var(--muted)">(click to insert and copy)</span>' + T.meta.groups.map(function (g) {
+      return "<h4>" + esc(g.group) + "</h4>" + g.fields.map(function (f) { var tag = f.path.indexOf("items[].") === 0 ? f.path.slice(8) : f.path; return '<button type="button" data-act="phins" data-ph="' + esc(tag) + '" title="' + esc(f.note) + '">{{' + esc(tag) + "}}</button>"; }).join("");
+    }).join("") + "</div>";
+  }
+  function builderForm(b) {
+    var opt = function (v, l, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(l) + "</option>"; };
+    var o = b.overrides || {};
+    return '<form class="bform" id="bForm"><label>Base layout<select name="layout">' + T.meta.builtins.map(function (x) { return opt(x.id, x.name, b.layout); }).join("") + "</select></label>" +
+      '<div class="row2"><label>Brand colour<input type="color" name="color" value="' + esc(b.color) + '"></label><label>Font<select name="font">' + opt("system", "Clean (Helvetica)", b.font) + opt("modern", "Modern", b.font) + opt("serif", "Classic (Georgia)", b.font) + opt("mono", "Typewriter", b.font) + "</select></label></div>" +
+      '<label style="display:flex;gap:6px;align-items:center;font-weight:500"><input type="checkbox" name="showLogo" style="width:auto"' + (b.showLogo ? " checked" : "") + "> Show my logo</label>" +
+      '<div><b style="font-size:13px">Columns in the items table</b><div class="cols3"><label style="display:flex;gap:6px;font-weight:500"><input type="checkbox" name="qty" style="width:auto"' + (b.columns.qty ? " checked" : "") + '> Qty</label><label style="display:flex;gap:6px;font-weight:500"><input type="checkbox" name="rate" style="width:auto"' + (b.columns.rate ? " checked" : "") + '> Rate</label><label style="display:flex;gap:6px;font-weight:500"><input type="checkbox" name="tax" style="width:auto"' + (b.columns.tax ? " checked" : "") + "> GST %</label></div></div>" +
+      '<label>Footer text<input name="footer" maxlength="300" value="' + esc(b.footer) + '"></label><label>Terms<input name="terms" maxlength="1000" value="' + esc(b.terms) + '" placeholder="(uses your business terms when empty)"></label>' +
+      '<details><summary style="cursor:pointer;font-weight:600;font-size:13px">Company, bank and UPI details for this template only</summary><div class="bgrid">' +
+      ["name|Business name", "address|Address", "gstin|GSTIN", "email|Email", "phone|Phone", "bankName|Bank", "account|Account", "ifsc|IFSC", "upiId|UPI ID", "paymentLink|Payment link"].map(function (p) { var k = p.split("|")[0]; return "<label>" + esc(p.split("|")[1]) + '<input name="o_' + k + '" value="' + esc(o[k] || "") + '" placeholder="from your profile"></label>'; }).join("") + "</div></details></form>";
+  }
+  function readBuilder() {
+    var f = $("bForm"), o = {};
+    ["name", "address", "gstin", "email", "phone", "bankName", "account", "ifsc", "upiId", "paymentLink"].forEach(function (k) { var v = f.elements["o_" + k].value.trim(); if (v) o[k] = v; });
+    return { layout: f.elements.layout.value, color: f.elements.color.value, font: f.elements.font.value, showLogo: f.elements.showLogo.checked, columns: { qty: f.elements.qty.checked, rate: f.elements.rate.checked, tax: f.elements.tax.checked }, footer: f.elements.footer.value, terms: f.elements.terms.value, overrides: o };
+  }
+  function openEditor(opts) {
+    closeEditor(); state.busy = true;
+    E = { id: opts.id || null, mode: opts.mode, timer: null };
+    var invOpts = '<option value="">Sample invoice</option>' + T.invoices.map(function (i) { return '<option value="' + esc(i.id) + '">' + esc(i.number + " - " + i.clientName) + "</option>"; }).join("");
+    var left = opts.mode === "builder" ? builderForm(opts.builder || DEFAULT_BUILDER) : '<textarea class="src" id="eSrc" spellcheck="false" aria-label="Template HTML">' + esc(opts.source || "") + "</textarea>" + phPanel();
+    var div = document.createElement("div"); div.className = "editor"; div.id = "editor"; div.setAttribute("role", "dialog"); div.setAttribute("aria-label", "Template editor");
+    div.innerHTML = '<div class="ebar"><b>' + (opts.id ? "Edit template" : "New template") + '</b><input id="eName" maxlength="80" value="' + esc(opts.name || "") + '" aria-label="Template name">' +
+      '<span style="flex:1"></span><button class="btn" type="button" data-act="eclose">Cancel</button><button class="btn primary" type="button" id="eSave">' + (opts.id ? "Save new version" : "Save template") + "</button></div>" +
+      '<div class="split"><div class="left">' + left + '</div><div class="right"><div class="ptools"><label style="display:flex;gap:6px;align-items:center;font-weight:500">Preview with <select id="eInv">' + invOpts + '</select></label><button class="btn small" type="button" id="eRefresh">Refresh</button><button class="btn small" type="button" id="ePdf">Open exact PDF</button><span id="eState" style="color:var(--muted)"></span></div>' +
+      '<ul class="issues" id="eIssues"></ul><iframe class="pframe" id="eFrame" sandbox="" title="Invoice preview"></iframe></div></div>';
+    document.body.appendChild(div);
+    var schedule = function () { clearTimeout(E.timer); $("eState").textContent = "updating..."; E.timer = setTimeout(previewNow, 600); };
+    if (opts.mode === "builder") { $("bForm").addEventListener("input", schedule); $("bForm").addEventListener("change", schedule); }
+    else $("eSrc").addEventListener("input", schedule);
+    $("eInv").addEventListener("change", previewNow);
+    $("eRefresh").addEventListener("click", previewNow);
+    $("ePdf").addEventListener("click", previewPdf);
+    $("eSave").addEventListener("click", saveEditor);
+    $("eName").focus();
+    previewNow();
+  }
+  function closeEditor() { var el = $("editor"); if (el) el.remove(); if (E) clearTimeout(E.timer); E = null; state.busy = false; }
+  function draftBody() { var b = E.mode === "builder" ? { builder: readBuilder() } : { source: $("eSrc").value }; if ($("eInv").value) b.invoiceId = $("eInv").value; return b; }
+  function previewNow() {
+    if (!E) return; var mine = E;
+    api(tUrl("/new/preview"), { method: "POST", body: draftBody() }).then(function (r) {
+      if (E !== mine) return; $("eFrame").srcdoc = r.data.html; $("eState").textContent = "";
+      $("eIssues").innerHTML = issuesHtml(r.data.issues || []);
+    }).catch(function (err) { if (E !== mine) return; $("eState").textContent = ""; $("eIssues").innerHTML = issuesHtml(errIssues(err)); });
+  }
+  function previewPdf() {
+    var w = window.open("", "_blank");
+    fetch(tUrl("/new/preview"), { method: "POST", headers: { Authorization: "Bearer " + state.key, "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ format: "pdf" }, draftBody())) })
+      .then(function (res) { if (!res.ok) return res.json().then(function (j) { throw new Error(j.error || "PDF preview failed"); }); return res.blob(); })
+      .then(function (b) { var u = URL.createObjectURL(b); if (w) w.location.href = u; else window.location.href = u; setTimeout(function () { URL.revokeObjectURL(u); }, 60000); })
+      .catch(function (e) { if (w) w.close(); toast(e.message, "bad"); });
+  }
+  function saveEditor() {
+    var name = $("eName").value.trim(); if (!name) { $("eIssues").innerHTML = issuesHtml([{ level: "error", message: "Give the template a name" }]); return; }
+    var body = E.mode === "builder" ? { builder: readBuilder() } : { source: $("eSrc").value };
+    body.name = name;
+    var req = E.id ? api(tUrl("/" + encodeURIComponent(E.id)), { method: "PUT", body: body }) : api(tUrl("/"), { method: "POST", body: Object.assign({ type: E.mode === "builder" ? "builder" : "html" }, body) });
+    $("eSave").disabled = true;
+    req.then(function (r) {
+      var warned = (r.issues || []).some(function (i) { return i.level === "warning"; });
+      toast("Template saved (version " + r.data.currentVersion + ")" + (warned ? ". Scripts and event handlers were removed." : ""), "ok");
+      closeEditor(); loadTemplates();
+    }).catch(function (err) { $("eIssues").innerHTML = issuesHtml(errIssues(err)); }).then(function () { if ($("eSave")) $("eSave").disabled = false; });
+  }
+  function insertPlaceholder(tag) {
+    var ta = $("eSrc"), text = "{{" + tag + "}}";
+    if (ta) { var s = ta.selectionStart, e2 = ta.selectionEnd; ta.value = ta.value.slice(0, s) + text + ta.value.slice(e2); ta.selectionStart = ta.selectionEnd = s + text.length; ta.focus(); ta.dispatchEvent(new Event("input")); }
+    try { navigator.clipboard.writeText(text).catch(function () {}); } catch (x) {}
+    toast("Inserted " + text, "ok");
+  }
+
+  /* library actions */
+  function tById(id) { for (var i = 0; i < T.list.length; i++) if (T.list[i].id === id) return T.list[i]; return null; }
+  function tPreview(id) {
+    var t = tById(id); if (!t) return;
+    api(tUrl("/" + encodeURIComponent(id) + "/preview"), { method: "POST", body: {} }).then(function (r) {
+      openModal("<header><h2>" + esc(t.name) + '</h2><p>Preview with sample data</p></header><div class="body"><iframe sandbox="" title="Preview" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:8px;background:#fff" id="mPrev"></iframe><div class="foot"><button class="btn" data-act="close">Close</button></div></div>', true);
+      $("mPrev").srcdoc = r.data.html;
+    }).catch(function (e) { toast(e.message, "bad"); });
+  }
+  function tVersions(id) {
+    var t = tById(id);
+    api(tUrl("/" + encodeURIComponent(id) + "/versions")).then(function (r) {
+      openModal("<header><h2>Version history: " + esc(t.name) + '</h2><p>Every save is kept. Invoices always keep the version they were made with. Rolling back saves the old version as the newest one.</p></header><div class="body"><ul class="saved">' +
+        r.data.map(function (v) { return '<li><span class="nm">Version ' + v.version + (v.version === t.currentVersion ? ' <span class="chip ok">Current</span>' : "") + "<small>" + esc(new Date(v.createdAt).toLocaleString("en-IN")) + "</small></span>" + (v.version === t.currentVersion ? "" : '<button class="btn small" data-act="trollback" data-id="' + esc(id) + '" data-v="' + v.version + '">Roll back to this</button>') + "</li>"; }).join("") +
+        '</ul><div class="foot"><button class="btn" data-act="close">Close</button></div></div>', true);
+    }).catch(function (e) { toast(e.message, "bad"); });
+  }
+  function tRename(id) {
+    var t = tById(id);
+    openModal('<header><h2>Rename template</h2></header><form id="fRen"><label>Name<input name="name" required maxlength="80" value="' + esc(t.name) + '"></label><div class="err" id="fErr" role="alert"></div><div class="foot"><button type="button" class="btn" data-act="close">Cancel</button><button class="btn primary" type="submit">Rename</button></div></form>');
+    $("fRen").addEventListener("submit", function (e) { e.preventDefault(); api(tUrl("/" + encodeURIComponent(id)), { method: "PUT", body: { name: new FormData(e.target).get("name") } }).then(function () { closeModal(); loadTemplates(); }).catch(function (err) { $("fErr").textContent = err.message; }); });
+  }
+  function tDelete(id) {
+    var t = tById(id);
+    openModal('<header><h2>Delete "' + esc(t.name) + '"?</h2><p>Invoices already made with it are not affected.' + (t.isDefault ? " Your default goes back to ApexOutbox Standard." : "") + '</p></header><div class="body"><div class="foot"><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="tdelok" data-id="' + esc(id) + '">Delete</button></div></div>');
+  }
+  function tAct(a, el) {
+    var id = el.getAttribute("data-id");
+    if (a === "tedit") return openEditorFor(id);
+    if (a === "tprev") return tPreview(id);
+    if (a === "tvers") return tVersions(id);
+    if (a === "trename") return tRename(id);
+    if (a === "tdel") return tDelete(id);
+    if (a === "tdl") return downloadFrom(tUrl("/" + encodeURIComponent(id) + "/download"), "template.html");
+    var req = a === "tdefault" ? api(tUrl("/" + encodeURIComponent(id) + "/default"), { method: "POST" }).then(function () { toast("Default template set. New invoices use it.", "ok"); })
+      : a === "tdup" ? api(tUrl("/" + encodeURIComponent(id) + "/duplicate"), { method: "POST" }).then(function () { toast("Copy created", "ok"); })
+      : a === "tdelok" ? api(tUrl("/" + encodeURIComponent(id)), { method: "DELETE" }).then(function () { closeModal(); toast("Template deleted", "ok"); })
+      : a === "trollback" ? api(tUrl("/" + encodeURIComponent(id) + "/rollback"), { method: "POST", body: { version: Number(el.getAttribute("data-v")) } }).then(function (r) { closeModal(); toast("Rolled back (saved as version " + r.data.currentVersion + ")", "ok"); })
+      : a === "adel" ? api(tUrl("/assets/" + encodeURIComponent(id)), { method: "DELETE" }).then(function () { toast("File deleted", "ok"); })
+      : null;
+    if (a === "acopy") { var ref = "asset:" + el.getAttribute("data-name"); try { navigator.clipboard.writeText(ref).catch(function () {}); } catch (x) {} return toast("Copied " + ref, "ok"); }
+    if (req) req.then(loadTemplates).catch(function (e) { toast(e.message, "bad"); });
+  }
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-act]"); if (!el) return; var a = el.getAttribute("data-act");
+    if (a === "eclose") return closeEditor();
+    if (a === "phins") return insertPlaceholder(el.getAttribute("data-ph"));
+    if (/^(tedit|tprev|tvers|trename|tdel|tdl|tdefault|tdup|tdelok|trollback|adel|acopy)$/.test(a)) tAct(a, el);
+    if (a === "regen") regenModal(el.getAttribute("data-id"));
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && E && !$("modalRoot").firstChild) closeEditor(); });
+
+  /* regenerate an invoice with a template */
+  function regenModal(invoiceId) {
+    var go = function () {
+      var opts = T.list.map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.isDefault ? " selected" : "") + ">" + esc(t.name) + (t.isDefault ? " (default)" : "") + "</option>"; }).join("");
+      openModal('<header><h2>Regenerate the PDF</h2><p>Makes the PDF again with the chosen template. The email is not sent again.</p></header><form id="fRegen"><label>Template<select name="templateId">' + opts + '</select></label><div class="err" id="fErr" role="alert"></div><div class="foot"><button type="button" class="btn" data-act="close">Cancel</button><button class="btn primary" type="submit">Regenerate</button></div></form>');
+      $("fRegen").addEventListener("submit", function (e) {
+        e.preventDefault();
+        api(tUrl("/invoices/" + encodeURIComponent(invoiceId) + "/regenerate"), { method: "POST", body: { templateId: new FormData(e.target).get("templateId") } })
+          .then(function (r) { closeModal(); toast(r.data.fallback ? "PDF made with the built-in template (the chosen one failed)" : "PDF regenerated", r.data.fallback ? "" : "ok"); refresh(); })
+          .catch(function (err) { $("fErr").textContent = err.message; });
+      });
+    };
+    (T.loaded ? Promise.resolve() : loadTemplates()).then(go);
+  }
 
   /* ---------- events ---------- */
   document.addEventListener("click", function (e) {

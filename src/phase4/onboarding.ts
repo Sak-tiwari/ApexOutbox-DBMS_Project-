@@ -14,7 +14,16 @@ export const onboardingSchema = z.object({
     .max(100_000_000)
     .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, "amount must have at most 2 decimal places"),
   currency: z.string().length(3).default("INR"),
-  description: z.string().trim().min(1)
+  description: z.string().trim().min(1),
+  // Invoice Templates (all optional; old callers keep working)
+  ownerId: z.string().optional(),
+  invoiceNumber: z.string().optional(),
+  businessGstin: z.string().optional(),
+  clientGstin: z.string().optional(),
+  clientAddress: z.string().optional(),
+  clientState: z.string().optional(),
+  gstRate: z.number().min(0).max(28).optional(),
+  templateId: z.string().optional()
 });
 
 export function getInvoiceIdempotencyKey(

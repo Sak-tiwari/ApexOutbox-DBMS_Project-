@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Invoice {{invoice.number}}</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  body { font-family: {{brand.font}}; color: #1b1f33; font-size: 12px; margin: 0; }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid {{brand.color}}; padding-bottom: 14px; }
+  .top img { max-height: 56px; max-width: 180px; }
+  h1 { margin: 0; font-size: 28px; color: {{brand.color}}; letter-spacing: .04em; }
+  .muted { color: #626a85; } .right { text-align: right; }
+  .grid { display: flex; gap: 24px; margin: 18px 0; } .grid > div { flex: 1; }
+  h3 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #626a85; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th { background: {{brand.color}}; color: #fff; text-align: left; padding: 8px; font-size: 11px; }
+  td { padding: 8px; border-bottom: 1px solid #e2e5f0; } td.n, th.n { text-align: right; white-space: nowrap; }
+  .totals { margin-left: auto; width: 300px; margin-top: 12px; } .totals td { border: 0; padding: 4px 8px; }
+  .totals tr.grand td { font-size: 15px; font-weight: 700; border-top: 2px solid {{brand.color}}; padding-top: 8px; }
+  .words { margin-top: 10px; font-style: italic; }
+  .foot { margin-top: 26px; display: flex; gap: 24px; } .foot > div { flex: 1; }
+  .footer { margin-top: 28px; text-align: center; color: #626a85; font-size: 11px; }
+</style></head>
+<body>
+  <div class="top">
+    <div>{{#if business.logo}}<img src="{{business.logo}}" alt="">{{/if}}
+      <div style="font-size:16px;font-weight:700;margin-top:6px">{{business.name}}</div>
+      <div class="muted">{{business.address}}</div>
+      {{#if business.gstin}}<div>GSTIN: {{business.gstin}}</div>{{/if}}
+      <div class="muted">{{business.email}} {{business.phone}}</div>
+    </div>
+    <div class="right"><h1>INVOICE</h1>
+      <div><b>No.</b> {{invoice.number}}</div><div><b>Date</b> {{invoice.date}}</div>
+      {{#if invoice.due_date}}<div><b>Due</b> {{invoice.due_date}}</div>{{/if}}
+    </div>
+  </div>
+  <div class="grid">
+    <div><h3>Bill to</h3><b>{{client.name}}</b><div>{{client.company}}</div><div class="muted">{{client.address}}</div>
+      {{#if client.gstin}}<div>GSTIN: {{client.gstin}}</div>{{/if}}<div class="muted">{{client.email}}</div></div>
+    <div class="right"><h3>Amount due</h3><div style="font-size:22px;font-weight:700">{{totals.total}}</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Description</th>{{#if cols.qty}}<th class="n">Qty</th>{{/if}}{{#if cols.rate}}<th class="n">Rate</th>{{/if}}{{#if cols.tax}}<th class="n">GST</th>{{/if}}<th class="n">Amount</th></tr></thead>
+    <tbody>{{#each items}}<tr><td>{{description}}</td>{{#if ../cols.qty}}<td class="n">{{qty}}</td>{{/if}}{{#if ../cols.rate}}<td class="n">{{rate}}</td>{{/if}}{{#if ../cols.tax}}<td class="n">{{tax_rate}}</td>{{/if}}<td class="n">{{amount}}</td></tr>{{/each}}</tbody>
+  </table>
+  <table class="totals">
+    <tr><td>Subtotal</td><td class="n">{{totals.subtotal}}</td></tr>
+    {{#if tax.is_intra}}<tr><td>CGST ({{tax.cgst_rate}})</td><td class="n">{{totals.cgst}}</td></tr><tr><td>SGST ({{tax.sgst_rate}})</td><td class="n">{{totals.sgst}}</td></tr>{{/if}}
+    {{#if tax.is_inter}}<tr><td>IGST ({{tax.igst_rate}})</td><td class="n">{{totals.igst}}</td></tr>{{/if}}
+    <tr class="grand"><td>Total</td><td class="n">{{totals.total}}</td></tr>
+  </table>
+  <div class="words">{{totals.amount_in_words}}</div>
+  <div class="foot">
+    {{#if payment.has_bank}}<div><h3>Bank transfer</h3><div>{{payment.bank_name}}</div><div>A/c {{payment.account}}</div><div>IFSC {{payment.ifsc}}</div></div>{{/if}}
+    {{#if payment.upi_id}}<div><h3>UPI</h3><div>{{payment.upi_id}}</div>{{#if payment.qr}}<img src="{{payment.qr}}" alt="" style="width:90px;height:90px;margin-top:4px">{{/if}}</div>{{/if}}
+    {{#if payment.link}}<div><h3>Pay online</h3><div style="word-break:break-all">{{payment.link}}</div></div>{{/if}}
+  </div>
+  {{#if invoice.notes}}<p><b>Notes:</b> {{invoice.notes}}</p>{{/if}}
+  {{#if doc.terms}}<p class="muted"><b>Terms:</b> {{doc.terms}}</p>{{/if}}
+  <div class="footer">{{doc.footer}}</div>
+</body></html>

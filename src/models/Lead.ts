@@ -15,6 +15,14 @@ export interface IDeal {
     amount: number;
     currency: string;
     description: string;
+    // Invoice Templates: all optional, typed in the Close-the-deal form.
+    invoiceNumber?: string;
+    businessGstin?: string;
+    clientGstin?: string;
+    clientAddress?: string;
+    clientState?: string;
+    gstRate?: number;
+    templateId?: string;
 }
 
 export type OnboardingStatus = 'PENDING' | 'DONE' | 'FAILED' | 'CANCELLED';
@@ -68,7 +76,14 @@ const LeadSchema = new Schema<ILead>({
             email: { type: String, required: true, lowercase: true, trim: true },
             amount: { type: Number, required: true, min: 0 },
             currency: { type: String, required: true, default: 'INR' },
-            description: { type: String, required: true, trim: true }
+            description: { type: String, required: true, trim: true },
+            invoiceNumber: { type: String, trim: true },
+            businessGstin: { type: String, trim: true, uppercase: true },
+            clientGstin: { type: String, trim: true, uppercase: true },
+            clientAddress: { type: String, trim: true },
+            clientState: { type: String, trim: true },
+            gstRate: { type: Number },
+            templateId: { type: String }
         }, { _id: false }),
         default: undefined
     },

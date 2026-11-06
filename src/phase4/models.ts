@@ -45,6 +45,10 @@ const InvoiceSchema = new Schema(
       required: true,
       unique: true
     },
+    // Invoice Templates: owner and the number printed on the invoice. A user cannot use the same printed
+    // number twice; invoices made before this feature have neither field and are skipped by the sparse index.
+    ownerId: { type: String },
+    displayNumber: { type: String },
     snapshot: {
       type: Schema.Types.Mixed,
       required: true
@@ -81,6 +85,8 @@ const InvoiceSchema = new Schema(
   },
   { timestamps: true }
 );
+
+InvoiceSchema.index({ ownerId: 1, displayNumber: 1 }, { unique: true, sparse: true });
 
 export const Client = mongoose.models.Client || mongoose.model(
   "Client",

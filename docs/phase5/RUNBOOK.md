@@ -27,6 +27,7 @@ for that key to move it. Call the API with `Authorization: Bearer <key>` (or `x-
 | `MONGODB_URI`, `REDIS_URL` | yes | validated at start-up |
 | `API_KEYS` | production | `key:user,key2:user2`; keys at least 16 characters |
 | `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM` | production | without them the app **refuses to start** in production. Outside production it uses DEMO mode (nothing is sent) |
+| `CHROMIUM_PATH` | optional | Path to a system Chromium for invoice PDFs. Default: the one `npx playwright-core install chromium` downloads |
 | `LEAD_FINDER_MOCK` | optional | `true` = Lead Finder uses sample requests only (demos). Default `false` = live sources |
 | `LEAD_FINDER_DISABLED_SOURCES` | optional | Comma list of source ids to switch off, e.g. `reddit` |
 | `SCRAPER_ALLOW_LOOPBACK` | optional | `true`/`false`. Lets the scraper read the bundled `/demo/` pages on this machine. Default: on outside production, off in production |
@@ -130,3 +131,13 @@ Then start the worker: in-flight onboarding and invoices are finished by the rec
 - Saved searches with a schedule are put back in the queue by the worker (checked every minute).
 - A source chip "blocked" means the site answered 401/403/429 (common for Reddit from some networks). Nothing is retried; use another source or demo mode.
 - Each user may have 5 searches waiting at a time.
+
+
+## Invoice template operations
+
+- Invoice PDFs render in Chromium (API for previews, worker for real invoices). If Chromium is missing or broken the worker logs
+  `built-in HTML template failed too (is Chromium installed?)` and uses the basic PDF; nothing is lost. Fix with `npx playwright-core install chromium`.
+- `invoice template failed; using the built-in template` in the worker log names the invoice and template version that failed.
+  The customer still got an invoice. Open the template in the editor: the problems are listed.
+- Template files (logos, fonts, original .docx) are stored under `INVOICE_DIR/assets/<hash of owner>/`. Back this folder up with the invoices.
+- A user cannot reuse a printed invoice number; the deal form answers 409 with a clear message.

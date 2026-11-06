@@ -10,7 +10,7 @@ export const silentLog: Log = { info() {}, warn() {}, error() {} };
 export interface InvoiceRecord {
   id: string;
   invoiceNumber: string;
-  snapshot: { clientName: string; email: string; company: string; amount: number; currency: string; description: string; createdAt: Date };
+  snapshot: import("./types").InvoiceSnapshot;
   pdfPath: string;
   status: "PENDING" | "PDF_READY" | "EMAIL_SENDING" | "EMAIL_SENT" | "EMAIL_FAILED" | "EMAIL_UNCERTAIN" | "EMAIL_ABANDONED";
   emailAttempts: number;

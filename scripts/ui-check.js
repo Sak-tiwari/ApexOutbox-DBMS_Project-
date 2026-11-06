@@ -184,6 +184,7 @@ const check = (name, ok, extra = "") => { results.push(ok); console.log(`${ok ? 
   check("Lead Finder tab exists and the badge is hidden", (await page.locator("#finderBadge").isHidden()));
   await page.click('[data-tab="finder"]');
   await page.waitForSelector("#viewFinder:not([hidden])");
+  await page.waitForSelector("#fMock:not([hidden])", { timeout: 10000 }).catch(() => undefined);
   check("demo-mode banner is shown", await page.isVisible("#fMock"));
   await page.click("#fGo");
   await page.waitForFunction(() => /Describe your business/.test(document.getElementById("fErr").textContent));
@@ -260,6 +261,124 @@ const check = (name, ok, extra = "") => { results.push(ok); console.log(`${ok ? 
   check("mobile: Lead Finder does not scroll the page sideways", !(await fm.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
   await fm.screenshot({ path: `${SHOTS}/10-lead-finder-mobile.png` });
   await fm.close();
+
+  // ---- Invoice Templates ----
+  const PNG = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000" + "1f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4a70000000049454e44ae426082", "hex");
+  await page.click('[data-tab="templates"]');
+  await page.waitForSelector("#viewTemplates:not([hidden]) .tcard");
+  check("Invoice Templates tab lists the 4 built-ins with Standard as default", (await page.locator(".tcard").count()) === 4 && /ApexOutbox Standard/.test(await page.textContent(".tcard.def")));
+  await page.waitForFunction(() => document.querySelector('[data-thumb="builtin:standard"]').srcdoc.length > 100);
+  check("library cards show a rendered thumbnail", true);
+
+  const biz = page.locator("#fBiz");
+  check("business details open by default while empty", await page.locator("#bizCard").evaluate((d) => d.open));
+  await biz.locator("[name=name]").fill("Apex Web Studio");
+  await biz.locator("[name=gstin]").fill("27abcde1234f1z5");
+  await biz.locator("[name=state]").selectOption("Maharashtra");
+  await biz.locator("[name=defaultGstRate]").selectOption("18");
+  await biz.locator("[name=upiId]").fill("apex@hdfc");
+  await biz.locator("[name=gstin]").press("Enter");
+  await page.waitForFunction(() => /Business details saved/.test(document.getElementById("toasts").textContent));
+  await biz.locator("[name=ifsc]").fill("12"); await page.click("#fBiz button[type=submit]");
+  await page.waitForFunction(() => /IFSC/.test(document.getElementById("bizErr").textContent));
+  check("business details save, and a bad IFSC is refused inline", true);
+  await biz.locator("[name=ifsc]").fill("");
+  await page.setInputFiles("#bizLogoFile", { name: "logo.png", mimeType: "image/png", buffer: PNG });
+  await page.waitForSelector("#bizLogo:not([hidden])");
+  check("logo upload shows the logo", true);
+
+  const evilTpl = `<!doctype html><html><body><img src="{{business.logo}}" onerror="alert(1)"><h1>MY UI TEMPLATE</h1><p>{{invoice.number}} {{client.name}} {{business.name}}</p>
+<table>{{#each items}}<tr><td>{{description}}</td><td>{{amount}}</td></tr>{{/each}}</table><p>Total {{totals.total}}</p><script>document.body.innerHTML="HACKED"</script></body></html>`;
+  await page.setInputFiles("#tFile", { name: "my-template.html", mimeType: "text/html", buffer: Buffer.from(evilTpl) });
+  await page.waitForSelector("#editor");
+  await page.waitForFunction(() => { const f = document.getElementById("eFrame"); return f && /MY UI TEMPLATE/.test(f.srcdoc); }, null, { timeout: 15000 });
+  const src1 = await page.inputValue("#eSrc");
+  check("uploaded HTML opens in the editor, sanitised (no script, no onerror)", !/<script|onerror/i.test(src1) && /{{#each items}}/.test(src1));
+  const frameHtml = await page.$eval("#eFrame", (f) => f.srcdoc);
+  check("live preview shows the user's business name and the logo as an embedded image", /Apex Web Studio/.test(frameHtml) && /data:image\/png;base64/.test(frameHtml) && !/HACKED/.test(frameHtml));
+  check("preview frame is sandboxed (no scripts can run in it)", (await page.getAttribute("#eFrame", "sandbox")) === "");
+  await page.click("#eSrc"); await page.keyboard.press("End"); await page.keyboard.type("{{client.nmae}}");
+  await page.waitForFunction(() => /Unknown placeholder/.test(document.getElementById("eIssues").textContent), null, { timeout: 10000 });
+  check("typing an unknown placeholder shows an inline error", true);
+  await page.fill("#eSrc", src1);
+  await page.locator('#editor [data-ph="client.gstin"]').click();
+  check("clicking a placeholder inserts it", /\{\{client\.gstin\}\}/.test(await page.inputValue("#eSrc")));
+  await page.waitForFunction(() => !/Unknown placeholder/.test(document.getElementById("eIssues").textContent), null, { timeout: 10000 });
+  const [pdfPop] = await Promise.all([ctx.waitForEvent("page"), page.click("#ePdf")]);
+  await page.waitForTimeout(1500);
+  check("Open exact PDF opens the rendered PDF", !!pdfPop && !/failed/i.test(await page.textContent("#toasts")));
+  await pdfPop.close();
+  await page.click("#eSave");
+  await page.waitForFunction(() => /Template saved \(version 2\)/.test(document.getElementById("toasts").textContent));
+  check("saving an edit creates version 2", !(await page.$("#editor")));
+  await page.screenshot({ path: `${SHOTS}/11-templates.png`, fullPage: true });
+
+  const myCard = page.locator(".tcard", { hasText: "my-template" });
+  await myCard.locator('[data-act="tdefault"]').click();
+  await page.waitForSelector('.tcard.def:has-text("my-template")');
+  check("Set as default moves the Default badge (only one default)", (await page.locator(".tcard.def").count()) === 1);
+  await myCard.locator('[data-act="tvers"]').click();
+  await page.waitForSelector('[data-act="trollback"]');
+  check("version history lists both versions", (await page.locator(".modal .saved li").count()) === 2);
+  await page.click('[data-act="trollback"]');
+  await page.waitForFunction(() => /saved as version 3/.test(document.getElementById("toasts").textContent));
+  check("rolling back saves the old version as version 3", true);
+
+  await page.click("#tNewBuilder");
+  await page.waitForSelector("#bForm");
+  await page.fill("#bForm [name=footer]", "BUILDER FOOTER TEXT");
+  await page.selectOption("#bForm [name=layout]", "builtin:corporate");
+  await page.uncheck("#bForm [name=qty]");
+  await page.waitForFunction(() => /BUILDER FOOTER TEXT/.test(document.getElementById("eFrame").srcdoc), null, { timeout: 10000 });
+  check("quick builder updates the live preview (layout, footer, columns)", !/>Qty</.test(await page.$eval("#eFrame", (f) => f.srcdoc)));
+  await page.fill("#eName", "Builder one");
+  await page.click("#eSave");
+  await page.waitForSelector('.tcard:has-text("Builder one")');
+  check("builder template is saved to the library", true);
+
+  // close a deal with a typed invoice number and GSTINs, using the new default template
+  await page.click('[data-tab="pipeline"]');
+  await page.click("#btnNew");
+  await page.fill("#fNew [name=name]", "Template Client");
+  await page.fill("#fNew [name=company]", "Delhi Traders");
+  await page.click("#fNew button[type=submit]");
+  const tc = () => page.locator(".card", { hasText: "Template Client" });
+  await tc().waitFor();
+  for (const to of ["Contacted", "Negotiation"]) { await tc().locator(`[data-act=move][data-to="${to}"]`).click(); await page.waitForSelector(`.col[data-state="${to}"] .card:has-text("Template Client")`); }
+  await tc().locator('[data-act=move][data-to="Closed-Won"]').click();
+  await page.waitForFunction(() => document.querySelectorAll("#fDeal [name=templateId] option").length > 0);
+  check("deal form has invoice number, GSTIN, state, GST rate and template fields, pre-filled from the profile",
+    (await page.inputValue("#fDeal [name=businessGstin]")) === "27ABCDE1234F1Z5" && (await page.inputValue("#fDeal [name=gstRate]")) === "18" && /my-template \(default\)/.test(await page.textContent("#fDeal [name=templateId]")));
+  await page.fill("#fDeal [name=email]", "accounts@delhitraders.test");
+  await page.fill("#fDeal [name=amount]", "50000");
+  await page.fill("#fDeal [name=invoiceNumber]", "INV/UI/001");
+  await page.fill("#fDeal [name=clientGstin]", "07pqrsx6789k1z2");
+  await page.click("#fDeal button[type=submit]");
+  await page.waitForSelector('#invBody tr:has-text("INV/UI/001"):has-text("Email sent")', { timeout: 25000 });
+  check("the invoice uses the typed number, IGST across states, and is emailed", /IGST 18%/.test(await page.textContent('#invBody tr:has-text("INV/UI/001")')) && /59,000\.00/.test(await page.textContent('#invBody tr:has-text("INV/UI/001")')));
+  const pdfText = await page.evaluate(async (k) => {
+    const inv = (await (await fetch("/api/invoices?limit=5", { headers: { Authorization: "Bearer " + k } })).json()).data.find((i) => i.invoiceNumber === "INV/UI/001");
+    const r = await fetch("/api/invoices/" + inv.id + "/pdf", { headers: { Authorization: "Bearer " + k } });
+    const buf = await r.arrayBuffer();
+    return { type: r.headers.get("content-type"), size: buf.byteLength, tpl: inv.templateVersionId, status: r.status, body: buf.byteLength < 300 ? new TextDecoder().decode(buf) : "" };
+  }, KEY);
+  check("its PDF was made with the user's template (version recorded on the invoice)", pdfText.type === "application/pdf" && pdfText.size > 5000 && !!pdfText.tpl && !/^builtin/.test(pdfText.tpl), JSON.stringify(pdfText));
+  await page.locator('#invBody tr:has-text("INV/UI/001") [data-act="regen"]').click();
+  await page.selectOption("#fRegen [name=templateId]", "builtin:gst");
+  await page.click("#fRegen button[type=submit]");
+  await page.waitForFunction(() => /PDF regenerated/.test(document.getElementById("toasts").textContent));
+  check("Regenerate re-makes the PDF with another template", true);
+
+  await page.click('[data-tab="templates"]');
+  await page.locator('.tcard:has-text("Builder one") [data-act="tdel"]').click();
+  await page.click('[data-act="tdelok"]');
+  await page.waitForFunction(() => !/Builder one/.test(document.getElementById("tGrid").textContent));
+  check("a template can be deleted", true);
+  const tm = await ctx.newPage(); await tm.setViewportSize({ width: 390, height: 844 });
+  await tm.goto(BASE); await tm.waitForSelector("#app:not([hidden])"); await tm.click('[data-tab="templates"]'); await tm.waitForSelector("#viewTemplates .tcard");
+  check("mobile: Invoice Templates does not scroll the page sideways", !(await tm.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)));
+  await tm.screenshot({ path: `${SHOTS}/12-templates-mobile.png` });
+  await tm.close();
 
   // key is remembered across reload
   await page.reload();

@@ -1,0 +1,53 @@
+<!doctype html>
+{{!--
+  ApexOutbox example invoice template: uses EVERY placeholder.
+  Syntax: {{field}} prints a value (HTML-escaped). {{#if field}}...{{/if}} shows a part only when the field has a value.
+  {{#each items}}...{{/each}} repeats for every line item; inside it use {{description}}, {{qty}}, {{rate}}, {{tax_rate}},
+  {{amount}}, {{no}}, and ../ to reach outer fields (e.g. {{#if ../cols.qty}}).
+  Images: {{business.logo}}, {{payment.qr}}, or a file you uploaded under Assets: <img src="asset:signature.png">.
+  Not allowed (removed or rejected): <script>, onclick= / onerror=, <iframe>, <object>, javascript: links,
+  external images or fonts (http...), triple-brace raw output and custom helpers.
+--}}
+<html><head><meta charset="utf-8"><title>Invoice {{invoice.number}}</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  body { font-family: {{brand.font}}; font-size: 12px; color: #222; }
+  h1 { color: {{brand.color}}; margin: 0; }
+  table { width: 100%; border-collapse: collapse; } td, th { border: 1px solid #ccc; padding: 6px; } .n { text-align: right; }
+  .box { border: 1px solid #ddd; padding: 8px; margin: 8px 0; }
+</style></head>
+<body>
+  {{#if business.logo}}<img src="{{business.logo}}" alt="logo" style="max-height:60px">{{/if}}
+  <h1>INVOICE {{invoice.number}}</h1>
+  <p>Date: {{invoice.date}} | Due: {{invoice.due_date}} | Currency: {{invoice.currency}} | Status: {{invoice.status}}</p>
+
+  <div class="box"><b>From</b><br>{{business.name}}<br>{{business.address}}<br>State: {{business.state}}<br>GSTIN: {{business.gstin}}<br>{{business.email}} | {{business.phone}}</div>
+  <div class="box"><b>Bill to</b><br>{{client.name}}<br>{{client.company}}<br>{{client.address}}<br>State: {{client.state}}<br>GSTIN: {{client.gstin}}<br>{{client.email}}</div>
+
+  <table>
+    <thead><tr><th>#</th><th>Description</th>{{#if cols.qty}}<th class="n">Qty</th>{{/if}}{{#if cols.rate}}<th class="n">Rate</th>{{/if}}{{#if cols.tax}}<th class="n">GST</th>{{/if}}<th class="n">Amount</th></tr></thead>
+    <tbody>
+      {{#each items}}
+      <tr><td>{{no}}</td><td>{{description}}</td>{{#if ../cols.qty}}<td class="n">{{qty}}</td>{{/if}}{{#if ../cols.rate}}<td class="n">{{rate}}</td>{{/if}}{{#if ../cols.tax}}<td class="n">{{tax_rate}}</td>{{/if}}<td class="n">{{amount}}</td></tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  <table style="width:50%;margin-left:auto;margin-top:10px">
+    <tr><td>Subtotal</td><td class="n">{{totals.subtotal}}</td></tr>
+    <tr><td>Discount</td><td class="n">{{totals.discount}}</td></tr>
+    {{#if tax.is_intra}}<tr><td>CGST {{tax.cgst_rate}}</td><td class="n">{{totals.cgst}}</td></tr><tr><td>SGST {{tax.sgst_rate}}</td><td class="n">{{totals.sgst}}</td></tr>{{/if}}
+    {{#if tax.is_inter}}<tr><td>IGST {{tax.igst_rate}}</td><td class="n">{{totals.igst}}</td></tr>{{/if}}
+    <tr><td><b>Total</b> ({{tax.label}}, GST {{tax.rate}})</td><td class="n"><b>{{totals.total}}</b></td></tr>
+  </table>
+  <p><i>{{totals.amount_in_words}}</i></p>
+
+  <div class="box"><b>Payment</b><br>
+    {{#if payment.has_bank}}Bank: {{payment.bank_name}}, A/c {{payment.account}}, IFSC {{payment.ifsc}}<br>{{/if}}
+    UPI: {{payment.upi_id}}<br>Link: {{payment.link}}<br>
+    {{#if payment.qr}}<img src="{{payment.qr}}" alt="QR" style="width:90px">{{/if}}
+  </div>
+  {{#if invoice.notes}}<p>Notes: {{invoice.notes}}</p>{{/if}}
+  <p>Terms: {{doc.terms}}</p>
+  <p style="text-align:center">{{doc.footer}}</p>
+</body></html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Invoice {{invoice.number}}</title>
+<style>
+  @page { size: A4; margin: 22mm 20mm; }
+  body { font-family: {{brand.font}}; color: #222; font-size: 12px; line-height: 1.5; margin: 0; }
+  .head { display: flex; justify-content: space-between; margin-bottom: 36px; }
+  .head img { max-height: 40px; }
+  .t { font-size: 13px; letter-spacing: .3em; text-transform: uppercase; color: {{brand.color}}; }
+  .small { color: #777; font-size: 11px; }
+  table { width: 100%; border-collapse: collapse; margin: 24px 0 8px; }
+  th { text-align: left; font-weight: 600; font-size: 11px; color: #777; border-bottom: 1px solid #ddd; padding: 6px 0; }
+  td { padding: 8px 0; border-bottom: 1px solid #f0f0f0; } .n { text-align: right; }
+  .sum { width: 260px; margin-left: auto; } .sum div { display: flex; justify-content: space-between; padding: 3px 0; }
+  .sum .g { font-size: 16px; font-weight: 700; border-top: 1px solid #222; margin-top: 4px; padding-top: 6px; }
+</style></head>
+<body>
+  <div class="head">
+    <div>{{#if business.logo}}<img src="{{business.logo}}" alt=""><br>{{/if}}<b>{{business.name}}</b><div class="small">{{business.address}}{{#if business.gstin}} &middot; GSTIN {{business.gstin}}{{/if}}</div></div>
+    <div style="text-align:right"><div class="t">Invoice</div><div>{{invoice.number}}</div><div class="small">{{invoice.date}}</div></div>
+  </div>
+  <div class="small">Billed to</div>
+  <div><b>{{client.name}}</b>{{#if client.company}}, {{client.company}}{{/if}}</div>
+  <div class="small">{{client.address}} {{#if client.gstin}}GSTIN {{client.gstin}}{{/if}}</div>
+  <table><thead><tr><th>Item</th>{{#if cols.qty}}<th class="n">Qty</th>{{/if}}{{#if cols.rate}}<th class="n">Rate</th>{{/if}}{{#if cols.tax}}<th class="n">Tax</th>{{/if}}<th class="n">Amount</th></tr></thead>
+  <tbody>{{#each items}}<tr><td>{{description}}</td>{{#if ../cols.qty}}<td class="n">{{qty}}</td>{{/if}}{{#if ../cols.rate}}<td class="n">{{rate}}</td>{{/if}}{{#if ../cols.tax}}<td class="n">{{tax_rate}}</td>{{/if}}<td class="n">{{amount}}</td></tr>{{/each}}</tbody></table>
+  <div class="sum">
+    <div><span>Subtotal</span><span>{{totals.subtotal}}</span></div>
+    {{#if tax.is_intra}}<div><span>CGST {{tax.cgst_rate}}</span><span>{{totals.cgst}}</span></div><div><span>SGST {{tax.sgst_rate}}</span><span>{{totals.sgst}}</span></div>{{/if}}
+    {{#if tax.is_inter}}<div><span>IGST {{tax.igst_rate}}</span><span>{{totals.igst}}</span></div>{{/if}}
+    <div class="g"><span>Total</span><span>{{totals.total}}</span></div>
+  </div>
+  <p class="small">{{totals.amount_in_words}}</p>
+  {{#if payment.upi_id}}<p class="small">UPI: {{payment.upi_id}}</p>{{/if}}
+  {{#if payment.has_bank}}<p class="small">{{payment.bank_name}} &middot; A/c {{payment.account}} &middot; IFSC {{payment.ifsc}}</p>{{/if}}
+  {{#if doc.terms}}<p class="small">{{doc.terms}}</p>{{/if}}
+  <p class="small" style="text-align:center;margin-top:30px">{{doc.footer}}</p>
+</body></html>

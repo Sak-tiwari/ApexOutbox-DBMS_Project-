@@ -18,6 +18,73 @@ When you close that lead as Won, the client email is pre-filled from what the sc
 - Demo: three fake business pages and one page blocked by robots.txt live in `public/demo/` (buttons in the dashboard).
   They are only reachable by the scraper when `SCRAPER_ALLOW_LOOPBACK` is on (default outside production).
 
+## Invoice Templates (your own invoice design)
+
+The **Invoice Templates** tab lets every user design their own invoice. Every new invoice uses the user's **default**
+template; the built-in **ApexOutbox Standard** is the fallback and cannot be deleted. Also built in: **Minimal**,
+**Corporate** and **GST Tax Invoice**.
+
+**Your business details** (top of the tab): name, address, state, GSTIN, email, phone, bank, IFSC, UPI ID, payment link,
+logo, payment QR, default GST rate and terms. They are copied onto each invoice when it is created.
+
+**When you close a deal** the form also asks (all optional): **invoice number** (e.g. `INV/2026/001`; automatic if empty;
+you cannot use the same number twice), **business GSTIN** (pre-filled), client GSTIN, client state, client address,
+GST rate and template. GST is worked out automatically: **CGST + SGST** when the client is in your state, **IGST** when
+not (the state is read from the GSTIN when there is one). Amounts use Indian grouping (₹1,00,000.00) and the total is
+also written in words.
+
+### Three ways to make a template
+1. **Upload HTML** (or paste it in the editor): an HTML page with placeholders.
+2. **Upload Word (.docx)**: type the same placeholders in Word. Put `[[ITEMS_TABLE]]` on its own line where the line items
+   table should go. The file is converted to HTML on the server, so complex Word layouts are simplified.
+   Macro-enabled files are refused.
+3. **Quick builder** (no code): pick a base layout, brand colour, font, logo on/off, which columns to show, footer and terms,
+   and optionally company/bank/UPI details just for this template.
+
+The editor is a split view: the template (or the builder form) on the left, a **live preview** on the right with sample data
+or one of your real invoices, plus **Open exact PDF**. Problems are listed before you save: unknown placeholders, missing
+required fields (`invoice.number`, `client.name`, `totals.total`) and images that cannot load.
+
+### Placeholder syntax
+Handlebars syntax, in a locked-down mode:
+
+| You write | Meaning |
+|---|---|
+| `{{client.name}}` | prints a value (HTML is escaped, so data can never inject markup) |
+| `{{#if client.gstin}}GSTIN: {{client.gstin}}{{/if}}` | only when it has a value (`{{else}}` and `{{#unless}}` also work) |
+| `{{#each items}} {{no}} {{description}} {{qty}} {{rate}} {{tax_rate}} {{amount}} {{/each}}` | one row per line item; use `../` for outer fields inside it |
+| `<img src="{{business.logo}}">`, `<img src="{{payment.qr}}">` | your logo / payment QR |
+| `<img src="asset:signature.png">`, `url(asset:font.woff2)` | a file you uploaded under *Files for templates* |
+
+All fields: `business.*` (name, logo, address, gstin, state, email, phone), `client.*` (name, company, address, gstin, state, email),
+`invoice.*` (number, date, due_date, currency, status, notes), `items[]`, `totals.*` (subtotal, discount, cgst, sgst, igst, total,
+amount_in_words), `tax.*` (is_intra, is_inter, rate, cgst_rate, sgst_rate, igst_rate, label), `payment.*` (bank_name, account, ifsc,
+upi_id, qr, link, has_bank), and layout values `brand.color`, `brand.font`, `cols.qty/rate/tax`, `doc.footer`, `doc.terms`.
+The tab has a click-to-copy reference, and **Download example template** gives an HTML file that uses every placeholder.
+
+**Not allowed** (removed when saving, or rejected): `<script>`, `onclick=`/`onerror=` and other event handlers, `<iframe>`,
+`<object>`, `<embed>`, `<form>`, `<svg>` inline, `javascript:` links, external images/fonts/CSS (`http...`), triple-brace raw
+output `{{{ }}}`, partials and custom helpers.
+
+### Versions and safety
+- Saving a template creates a **new version**; versions are never changed. Each invoice records the version it was made with,
+  so editing (or deleting) a template never changes invoices already sent. **Roll back** copies an old version forward.
+- **Regenerate** (invoice list) makes the PDF again with a chosen template, without sending the email again.
+- PDFs are made in headless **Chromium with JavaScript disabled, every network request blocked** (images and fonts are embedded
+  as data), a 15 s time limit, and at most 3 renders at once.
+- If a template fails, the invoice uses the built-in Standard template (a warning is logged). If Chromium itself is not
+  available, the original basic PDF is used. Invoice emails never fail because of a template.
+- Uploads: max 5 MB; `.html .css .docx .png .jpg .svg .woff2` only; the file content must match its type (an SVG with scripts is refused).
+- Everything (templates, versions, files, business details, previews, regenerate) is scoped to the API key's owner.
+  One default per user is guaranteed by the database: it is a field on the user's single business profile (unique `ownerId`).
+
+**Chromium:** `start-apexoutbox.bat` downloads it once (about 150 MB). By hand: `npx playwright-core install chromium`.
+In Docker the image uses Alpine's Chromium (`CHROMIUM_PATH`).
+
+Data model (MongoDB): `businessprofiles`, `invoicetemplates`, `invoicetemplateversions` (unique `templateId + version`),
+`templateassets` (unique `ownerId + name`); invoices gain `ownerId`, `displayNumber` (unique per owner) and
+`snapshot.templateVersionId`.
+
 ## Lead Finder (find clients who are asking for work)
 
 The **Lead Finder** tab is the reverse of the website scraper: instead of listing businesses, it finds *requests*:

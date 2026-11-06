@@ -17,10 +17,19 @@ if not exist ".env" (
   pause
   exit /b 1
 )
-if not exist "node_modules\crawlee" (
+if not exist "node_modules\playwright-core\package.json" (
   echo  First run: installing packages, this takes a minute...
   call npm ci
-  if errorlevel 1 ( echo  npm ci failed. & pause & exit /b 1 )
+  if errorlevel 1 ( echo  npm ci failed. Close other ApexOutbox windows and try again. & pause & exit /b 1 )
+)
+if not exist "node_modules\.apexoutbox-chromium" (
+  echo  One-time download of the PDF renderer ^(Chromium, about 150 MB^)...
+  call npx playwright-core install chromium
+  if errorlevel 1 (
+    echo  Chromium could not be downloaded. Invoices still work with the basic PDF design; run start again later to retry.
+  ) else (
+    echo installed> "node_modules\.apexoutbox-chromium"
+  )
 )
 
 echo  Stopping any old copy...

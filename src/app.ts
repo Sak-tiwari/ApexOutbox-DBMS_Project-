@@ -11,6 +11,8 @@ import { createInvoiceRouter, type InvoiceReader } from './routes/invoiceRoutes'
 import { createLeadFinderRouter } from './routes/leadFinderRoutes';
 import type { LeadFinderStore } from './leadFinder/store';
 import type { LeadSource } from './leadFinder/types';
+import { createInvoiceTemplateRouter, type InvoiceAccess } from './routes/invoiceTemplateRoutes';
+import type { InvoiceTemplateStore } from './invoiceTemplates/store';
 import { createScrapeRouter } from './routes/scrapeRoutes';
 import type { ScrapeJobStore } from './scraper/jobs';
 import type { SafeUrlOptions } from './scraper/safeUrl';
@@ -39,6 +41,8 @@ export interface AppDeps extends LeadRouterDeps {
   scraperSafeUrl?: SafeUrlOptions;
   /** Enables /api/lead-finder. `sources` is only used to list the platforms; the worker runs the searches. */
   leadFinder?: { store: LeadFinderStore; sources: LeadSource[]; mock: boolean };
+  /** Enables /api/invoice-templates. */
+  invoiceTemplates?: { store: InvoiceTemplateStore; invoices: InvoiceAccess; toPdf?: (html: string) => Promise<Buffer> };
 }
 
 async function probe(fn: () => Promise<boolean> | boolean): Promise<boolean> {
@@ -55,7 +59,10 @@ async function probe(fn: () => Promise<boolean> | boolean): Promise<boolean> {
 export function createApp(deps: AppDeps): Express {
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '100kb' }));
+  // Template uploads (HTML, DOCX, logos) can be up to 5 MB, sent as base64 JSON; everything else stays small.
+  const smallJson = express.json({ limit: '100kb' });
+  const uploadJson = express.json({ limit: '8mb' });
+  app.use((req, res, next) => (req.path.startsWith('/api/invoice-templates') ? uploadJson : smallJson)(req, res, next));
 
   // Request id + access log + request counter.
   app.use((req, res, next) => {
@@ -105,10 +112,11 @@ export function createApp(deps: AppDeps): Express {
   app.use('/api', rateLimit({ limit: deps.rateLimitPerMinute ?? 0 }));
   app.use('/api/leads', auth, createLeadRouter(deps));
   app.get('/api/meta', auth, (_req, res) => {
-    res.json({ success: true, data: { transitions: ALLOWED_TRANSITIONS, reasonRequiredFrom: ['Closed-Won', 'Closed-Lost'], emailMode: deps.emailMode ?? 'demo', scraper: Boolean(deps.scrapeJobs), leadFinder: Boolean(deps.leadFinder), leadFinderMock: Boolean(deps.leadFinder?.mock), demoPages: Boolean(deps.scraperSafeUrl?.allowLoopback) } });
+    res.json({ success: true, data: { transitions: ALLOWED_TRANSITIONS, reasonRequiredFrom: ['Closed-Won', 'Closed-Lost'], emailMode: deps.emailMode ?? 'demo', scraper: Boolean(deps.scrapeJobs), leadFinder: Boolean(deps.leadFinder), leadFinderMock: Boolean(deps.leadFinder?.mock), invoiceTemplates: Boolean(deps.invoiceTemplates), demoPages: Boolean(deps.scraperSafeUrl?.allowLoopback) } });
   });
   if (deps.scrapeJobs) app.use('/api/scrape-jobs', auth, createScrapeRouter({ jobs: deps.scrapeJobs, safeUrl: deps.scraperSafeUrl ?? {} }));
   if (deps.leadFinder) app.use('/api/lead-finder', auth, createLeadFinderRouter({ ...deps.leadFinder, leads: deps.leads }));
+  if (deps.invoiceTemplates) app.use('/api/invoice-templates', auth, createInvoiceTemplateRouter(deps.invoiceTemplates));
   if (deps.invoices) app.use('/api/invoices', auth, createInvoiceRouter({ invoices: deps.invoices, invoiceDir: deps.invoiceDir ?? 'generated-invoices' }));
   app.use('/api/phase4', auth, createOnboardingRouter());
 

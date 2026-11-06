@@ -5,6 +5,8 @@ interface EmailDetails {
   to: string;
   clientName: string;
   invoiceNumber: string;
+  /** The number printed on the invoice (may contain /). Shown in the subject; the internal number keeps the Message-ID stable. */
+  displayNumber?: string;
   pdfPath: string;
 }
 
@@ -107,13 +109,13 @@ export async function sendInvoiceEmail(
       from,
       to: details.to,
       messageId: messageIdFor(details.invoiceNumber, from),
-      subject: `Your invoice ${details.invoiceNumber}`,
+      subject: `Your invoice ${details.displayNumber || details.invoiceNumber}`,
       text: `Hi ${details.clientName},
 
 Thank you for choosing us. Your invoice is attached.`,
       attachments: [
         {
-          filename: `${details.invoiceNumber}.pdf`,
+          filename: `${(details.displayNumber || details.invoiceNumber).replace(/[^A-Za-z0-9._-]/g, "-")}.pdf`,
           path: details.pdfPath
         }
       ]

@@ -2,6 +2,15 @@ import mongoose from "mongoose";
 import { Client, Invoice } from "./models";
 import { getInvoiceIdempotencyKey, type onboardingSchema } from "./onboarding";
 import { recordOnboardingEvent } from "./outbox";
+import path from "node:path";
+import { computeTotals } from "../invoiceTemplates/gst";
+import { InvoiceTemplateStore } from "../invoiceTemplates/store";
+import type { InvoiceSnapshot } from "./types";
+
+// Only reads the business profile and the default template here (no files), so the asset folder is not used.
+const templates = new InvoiceTemplateStore(path.join(process.env.INVOICE_DIR || "generated-invoices", "assets"));
+
+export class InvoiceNumberTakenError extends Error {}
 import type { z } from "zod";
 
 export type OnboardingInput = z.infer<typeof onboardingSchema>;
@@ -44,26 +53,26 @@ export async function onboardClient(data: OnboardingInput): Promise<OnboardingRe
     }
     if (!client) throw new Error("Client could not be created or found");
 
+    const invoiceNumber = `INV-${new mongoose.Types.ObjectId().toString()}`;
+    const snapshot = await buildSnapshot(data, invoiceNumber);
     try {
       invoice = await Invoice.create({
         idempotencyKey,
-        invoiceNumber: `INV-${new mongoose.Types.ObjectId().toString()}`,
+        invoiceNumber,
         clientId: client._id,
-        snapshot: {
-          clientName: data.clientName,
-          email: data.email,
-          company: data.company || "",
-          amount: data.amount,
-          currency: data.currency,
-          description: data.description,
-          createdAt: new Date()
-        },
+        snapshot,
+        ...(data.ownerId ? { ownerId: data.ownerId, displayNumber: snapshot.displayNumber } : {}),
         status: "PENDING"
       });
     } catch (error) {
       // A duplicate request may have created the invoice first.
       invoice = await Invoice.findOne({ idempotencyKey });
-      if (!invoice) throw error;
+      if (!invoice) {
+        if (isDuplicateKey(error) && /displayNumber/.test(String((error as { message?: string }).message))) {
+          throw new InvoiceNumberTakenError(`Invoice number ${snapshot.displayNumber} is already used on another invoice`);
+        }
+        throw error;
+      }
     }
   }
 
@@ -76,5 +85,40 @@ export async function onboardClient(data: OnboardingInput): Promise<OnboardingRe
     invoiceId: String(invoice._id),
     invoiceNumber: invoice.invoiceNumber,
     status: invoice.status
+  };
+}
+
+/**
+ * Everything printed on the invoice is copied into the snapshot when the invoice is created: business details,
+ * GST, totals and the template version. Later edits to the profile or the template never change this invoice.
+ */
+async function buildSnapshot(data: OnboardingInput, internalNumber: string): Promise<InvoiceSnapshot> {
+  const base: InvoiceSnapshot = {
+    clientName: data.clientName, email: data.email, company: data.company || "", amount: data.amount,
+    currency: data.currency, description: data.description, createdAt: new Date(),
+  };
+  if (!data.ownerId) return base; // old callers (the plain /api/onboard route): unchanged behaviour
+  const biz = await templates.getBusiness(data.ownerId);
+  const business = {
+    name: biz.name, address: biz.address, gstin: data.businessGstin || biz.gstin, state: biz.state, email: biz.email, phone: biz.phone,
+    logoAssetId: biz.logoAssetId, bankName: biz.bankName, account: biz.account, ifsc: biz.ifsc, upiId: biz.upiId,
+    paymentLink: biz.paymentLink, qrAssetId: biz.qrAssetId, terms: biz.terms,
+  };
+  const rate = data.gstRate ?? biz.defaultGstRate ?? 0;
+  const items = [{ description: data.description, qty: 1, rate: data.amount, taxRate: rate, amount: data.amount }];
+  const totals = computeTotals(items, rate, business, { gstin: data.clientGstin, state: data.clientState });
+  return {
+    ...base,
+    amount: totals.total,
+    ownerId: data.ownerId,
+    displayNumber: data.invoiceNumber || internalNumber,
+    business,
+    clientAddress: data.clientAddress || "",
+    clientState: data.clientState || "",
+    clientGstin: data.clientGstin || "",
+    items,
+    gstRate: rate,
+    totals,
+    templateVersionId: await templates.resolveVersionId(data.ownerId, data.templateId),
   };
 }

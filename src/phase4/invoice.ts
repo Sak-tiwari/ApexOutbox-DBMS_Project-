@@ -36,7 +36,8 @@ export async function generateInvoicePDF(
       pdf.fontSize(24).text("INVOICE", { align: "right" });
       pdf.moveDown();
 
-      pdf.fontSize(12).text(`Invoice Number: ${invoiceNumber}`);
+      pdf.fontSize(12).text(`Invoice Number: ${snapshot.displayNumber || invoiceNumber}`);
+      if (snapshot.business?.name) pdf.text(`From: ${snapshot.business.name}${snapshot.business.gstin ? ` (GSTIN ${snapshot.business.gstin})` : ""}`);
       pdf.text(`Date: ${createdAt.toLocaleDateString("en-IN")}`);
 
       pdf.moveDown();
@@ -47,6 +48,14 @@ export async function generateInvoicePDF(
       pdf.moveDown();
       pdf.text(`Description: ${snapshot.description}`);
 
+      pdf.moveDown();
+      if (snapshot.totals && snapshot.totals.mode !== "none") {
+        const t = snapshot.totals;
+        pdf.text(`Taxable value: ${snapshot.currency} ${t.subtotal.toFixed(2)}`);
+        if (t.mode === "intra") pdf.text(`CGST: ${snapshot.currency} ${t.cgst.toFixed(2)}   SGST: ${snapshot.currency} ${t.sgst.toFixed(2)}`);
+        else pdf.text(`IGST: ${snapshot.currency} ${t.igst.toFixed(2)}`);
+      }
+      if (snapshot.clientGstin) pdf.text(`Client GSTIN: ${snapshot.clientGstin}`);
       pdf.moveDown();
       pdf.fontSize(18).text(`Total: ${snapshot.currency} ${snapshot.amount.toFixed(2)}`);
 

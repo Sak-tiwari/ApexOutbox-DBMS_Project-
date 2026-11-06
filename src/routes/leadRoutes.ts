@@ -1,11 +1,16 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { ValidationError, NotFoundError } from '../errors';
+import { ValidationError, NotFoundError, ConflictError } from '../errors';
 import { TransitionService } from '../services/TransitionService';
 import { attemptOnboarding, OnboardFn } from '../services/onboardingHandoff';
 import type { LeadStore } from '../stores/types';
 import type { Log } from '../phase4/ports';
 import type { Metrics } from '../metrics';
+
+import { GSTIN_RE } from '../invoiceTemplates/gst';
+
+export const INVOICE_NUMBER_RE = /^[A-Za-z0-9][A-Za-z0-9/_-]{0,39}$/;
+const emptyToUndef = <T extends z.ZodTypeAny>(schema: T) => z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), schema);
 
 const STATES = ['New', 'Contacted', 'Follow-up', 'Negotiation', 'Closed-Won', 'Closed-Lost'] as const;
 
@@ -15,6 +20,14 @@ const dealSchema = z.object({
     .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, 'amount must have at most 2 decimal places'),
   currency: z.string().length(3).default('INR'),
   description: z.string().trim().min(1).max(500),
+  // Optional invoice details (Invoice Templates). Empty strings from the form are treated as "not given".
+  invoiceNumber: emptyToUndef(z.string().trim().regex(INVOICE_NUMBER_RE, 'Invoice number: 1-40 letters, digits, / _ or -').optional()),
+  businessGstin: emptyToUndef(z.string().trim().toUpperCase().regex(GSTIN_RE, 'Business GSTIN must be 15 characters, e.g. 27ABCDE1234F1Z5').optional()),
+  clientGstin: emptyToUndef(z.string().trim().toUpperCase().regex(GSTIN_RE, 'Client GSTIN must be 15 characters, e.g. 07ABCDE1234F1Z5').optional()),
+  clientAddress: emptyToUndef(z.string().trim().max(500).optional()),
+  clientState: emptyToUndef(z.string().trim().max(60).optional()),
+  gstRate: z.union([z.literal(0), z.literal(5), z.literal(12), z.literal(18), z.literal(28)]).optional(),
+  templateId: emptyToUndef(z.string().trim().regex(/^(builtin:[a-z-]{1,30}|[a-f0-9]{24})$/, 'Unknown template').optional()),
 });
 
 const transitionBody = z.object({
@@ -46,6 +59,8 @@ export interface LeadRouterDeps {
   onboard: OnboardFn;
   log: Log;
   metrics: Metrics;
+  /** True when this user already printed that invoice number on another invoice. */
+  invoiceNumberTaken?: (ownerId: string, invoiceNumber: string) => Promise<boolean>;
 }
 
 /**
@@ -108,9 +123,15 @@ export function createLeadRouter(deps: LeadRouterDeps): Router {
     try {
       const parsed = transitionBody.safeParse(req.body);
       if (!parsed.success) {
-        throw new ValidationError('Missing or invalid targetState / version / deal details', parsed.error.issues);
+        const first = parsed.error.issues[0];
+        // Deal fields have readable messages ("Client GSTIN must be 15 characters..."): show that one.
+        const msg = first && first.path[0] === 'deal' && first.path.length > 1 && !/^(Invalid|Expected|Required)/.test(first.message) ? first.message : 'Missing or invalid targetState / version / deal details';
+        throw new ValidationError(msg, parsed.error.issues);
       }
       const { targetState, version, reason, deal } = parsed.data;
+      if (targetState === 'Closed-Won' && deal?.invoiceNumber && deps.invoiceNumberTaken && (await deps.invoiceNumberTaken(req.userId!, deal.invoiceNumber))) {
+        throw new ConflictError(`Invoice number ${deal.invoiceNumber} is already used on another invoice. Leave it empty to number it automatically.`);
+      }
 
       let lead;
       try {

@@ -3,7 +3,9 @@ import mongoose from "mongoose";
 import IORedis from "ioredis";
 import { UnrecoverableError, Worker } from "bullmq";
 import { createLogger } from "../logger";
-import { generateInvoicePDF } from "./invoice";
+import path from "node:path";
+import { generateInvoicePdfWithTemplate } from "../invoiceTemplates/invoicePdf";
+import { InvoiceTemplateStore } from "../invoiceTemplates/store";
 import { sendInvoiceEmail } from "./email";
 import { MongoInvoiceStore } from "./mongoStores";
 import { InvoiceNotFoundError, processInvoiceJob } from "./processor";
@@ -19,12 +21,15 @@ async function main() {
   await mongoose.connect(mongoUri);
   const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
   const store = new MongoInvoiceStore();
+  const invoiceDir = process.env.INVOICE_DIR || "generated-invoices";
+  const templateStore = new InvoiceTemplateStore(path.join(invoiceDir, "assets"));
+  const generatePdf = async (n: string, s: import("./types").InvoiceSnapshot) => (await generateInvoicePdfWithTemplate(n, s, { store: templateStore, invoiceDir, log })).path;
 
   const worker = new Worker(
     QUEUE_NAME,
     async (job) => {
       try {
-        return await processInvoiceJob(job.data.invoiceId, { store, generatePdf: generateInvoicePDF, sendEmail: sendInvoiceEmail, log });
+        return await processInvoiceJob(job.data.invoiceId, { store, generatePdf, sendEmail: sendInvoiceEmail, log });
       } catch (error) {
         // Retrying cannot create a missing invoice.
         if (error instanceof InvoiceNotFoundError) throw new UnrecoverableError(error.message);

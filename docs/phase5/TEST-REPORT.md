@@ -105,3 +105,18 @@ Not tested: the public internet (the sandbox only reaches an allow-list), JavaSc
 | Browser | 50 checks in total including the whole Lead Finder flow and a mobile layout check. |
 
 Not tested: the live sites (the test sandbox only reaches an allow-list). The live source modules are tested against copies of their documented response formats; Reddit in particular often answers 403 to unauthenticated requests from some networks, which the UI shows as "blocked".
+
+
+## Invoice Templates
+
+| Area | Evidence |
+|---|---|
+| Money, words, GST | 21 unit tests: Indian grouping, lakh/crore words incl. paise, CGST+SGST vs IGST from GSTIN or state, rounding to the paisa, discounts, old invoices. |
+| Placeholder validation | Unknown fields, missing required fields, items-loop scoping, raw output/partials/helpers refused, syntax errors, image checks; every built-in and the example template valid; the example uses every placeholder. |
+| Sanitiser | 18 malicious inputs (script, onerror, javascript:, iframe, object, embed, svg, form, link, meta refresh, CSS url()/@import, base, encoded javascript:, math) all stripped; placeholders, loops and styles kept. Data is escaped; prototype access is blocked. |
+| Renderer (real Chromium) | A script and an onerror handler in the page cannot change it (checked in the PDF text); no request reaches a local server (CSS, font, image, iframe); time limit; built-in GST template renders the right totals. |
+| DOCX | Placeholders split by Word formatting are re-joined; `[[ITEMS_TABLE]]`; macro files (vbaProject.bin, macroEnabled) and embedded programs refused. |
+| End to end on MongoDB (24 tests) | Upload with logo, preview with sample and real invoice (HTML and PDF), set default (one per user, enforced by a unique index), deal with typed number and GSTINs creates the invoice with that template and IGST, worker emails it with the printed number, duplicate number refused, editing creates v2 and the old invoice still renders v1, history and rollback, regenerate with another template, rename/duplicate/download, builder, user isolation (11 endpoints answer 404 to another user), broken template falls back to the built-in, Chromium failure falls back to the basic PDF, deleting the default resets it. |
+| Browser | 73 checks in total, including the whole Invoice Templates flow and a mobile layout check. |
+
+Not tested: Chromium on Windows and in the Alpine Docker image (only Linux here), real SMTP, and Word files made by real Word versions (tests build minimal .docx files).

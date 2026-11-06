@@ -32,6 +32,14 @@ export async function attemptOnboarding(
     amount: lead.deal.amount,
     currency: lead.deal.currency,
     description: lead.deal.description,
+    ownerId: lead.ownerId,
+    invoiceNumber: lead.deal.invoiceNumber,
+    businessGstin: lead.deal.businessGstin,
+    clientGstin: lead.deal.clientGstin,
+    clientAddress: lead.deal.clientAddress,
+    clientState: lead.deal.clientState,
+    gstRate: lead.deal.gstRate,
+    templateId: lead.deal.templateId,
   });
 
   if (!parsed.success) {

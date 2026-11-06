@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Invoice {{invoice.number}}</title>
+<style>
+  @page { size: A4; margin: 0; }
+  body { font-family: {{brand.font}}; color: #1d2433; font-size: 12px; margin: 0; }
+  .band { background: {{brand.color}}; color: #fff; padding: 28px 40px; display: flex; justify-content: space-between; align-items: center; }
+  .band img { max-height: 54px; background: #fff; padding: 6px; border-radius: 6px; }
+  .band h1 { margin: 0; font-size: 30px; font-weight: 300; letter-spacing: .12em; }
+  .wrap { padding: 26px 40px; }
+  .cols { display: flex; gap: 30px; } .cols > div { flex: 1; }
+  .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: #8a90a6; margin-bottom: 4px; }
+  .box { background: #f5f6fa; border-radius: 8px; padding: 12px 14px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #8a90a6; padding: 8px; border-bottom: 2px solid {{brand.color}}; }
+  td { padding: 10px 8px; border-bottom: 1px solid #e6e8ef; } .n { text-align: right; white-space: nowrap; }
+  .tot { width: 320px; margin: 14px 0 0 auto; } .tot td { border: 0; padding: 5px 8px; }
+  .tot .g td { background: {{brand.color}}; color: #fff; font-size: 15px; font-weight: 700; }
+  .foot { border-top: 1px solid #e6e8ef; margin-top: 30px; padding-top: 14px; display: flex; gap: 30px; color: #545b70; } .foot > div { flex: 1; }
+</style></head>
+<body>
+  <div class="band"><div>{{#if business.logo}}<img src="{{business.logo}}" alt="">{{else}}<b style="font-size:20px">{{business.name}}</b>{{/if}}</div><h1>INVOICE</h1></div>
+  <div class="wrap">
+    <div class="cols">
+      <div><div class="lbl">From</div><b>{{business.name}}</b><div>{{business.address}}</div>{{#if business.gstin}}<div>GSTIN {{business.gstin}}</div>{{/if}}<div>{{business.email}}</div><div>{{business.phone}}</div></div>
+      <div><div class="lbl">Bill to</div><b>{{client.name}}</b><div>{{client.company}}</div><div>{{client.address}}</div>{{#if client.gstin}}<div>GSTIN {{client.gstin}}</div>{{/if}}<div>{{client.email}}</div></div>
+      <div class="box"><div class="lbl">Invoice no.</div><b>{{invoice.number}}</b><div class="lbl" style="margin-top:8px">Date</div>{{invoice.date}}{{#if invoice.due_date}}<div class="lbl" style="margin-top:8px">Due</div>{{invoice.due_date}}{{/if}}</div>
+    </div>
+    <table><thead><tr><th>Description</th>{{#if cols.qty}}<th class="n">Qty</th>{{/if}}{{#if cols.rate}}<th class="n">Rate</th>{{/if}}{{#if cols.tax}}<th class="n">GST</th>{{/if}}<th class="n">Amount</th></tr></thead>
+    <tbody>{{#each items}}<tr><td>{{description}}</td>{{#if ../cols.qty}}<td class="n">{{qty}}</td>{{/if}}{{#if ../cols.rate}}<td class="n">{{rate}}</td>{{/if}}{{#if ../cols.tax}}<td class="n">{{tax_rate}}</td>{{/if}}<td class="n">{{amount}}</td></tr>{{/each}}</tbody></table>
+    <table class="tot">
+      <tr><td>Subtotal</td><td class="n">{{totals.subtotal}}</td></tr>
+      {{#if tax.is_intra}}<tr><td>CGST {{tax.cgst_rate}}</td><td class="n">{{totals.cgst}}</td></tr><tr><td>SGST {{tax.sgst_rate}}</td><td class="n">{{totals.sgst}}</td></tr>{{/if}}
+      {{#if tax.is_inter}}<tr><td>IGST {{tax.igst_rate}}</td><td class="n">{{totals.igst}}</td></tr>{{/if}}
+      <tr class="g"><td>Total due</td><td class="n">{{totals.total}}</td></tr>
+    </table>
+    <p style="text-align:right;color:#545b70">{{totals.amount_in_words}}</p>
+    <div class="foot">
+      <div><div class="lbl">Payment</div>{{#if payment.has_bank}}{{payment.bank_name}}, A/c {{payment.account}}, IFSC {{payment.ifsc}}<br>{{/if}}{{#if payment.upi_id}}UPI {{payment.upi_id}}<br>{{/if}}{{payment.link}}</div>
+      <div>{{#if invoice.notes}}<div class="lbl">Notes</div>{{invoice.notes}}{{/if}}{{#if doc.terms}}<div class="lbl" style="margin-top:6px">Terms</div>{{doc.terms}}{{/if}}</div>
+      {{#if payment.qr}}<div style="flex:0 0 100px"><img src="{{payment.qr}}" alt="" style="width:100px;height:100px"></div>{{/if}}
+    </div>
+    <p style="text-align:center;color:#8a90a6;margin-top:24px">{{doc.footer}}</p>
+  </div>
+</body></html>

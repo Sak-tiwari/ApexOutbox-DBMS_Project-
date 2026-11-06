@@ -26,7 +26,7 @@ const schema = z
     LEAD_FINDER_MOCK: z.enum(["true", "false"]).default("false"),
     LEAD_FINDER_DISABLED_SOURCES: z.string().default(""),
     SCRAPER_ALLOW_LOOPBACK: z.enum(["true", "false"]).optional(),
-    RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(0).default(300),
+    RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(0).default(600),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === "production") {

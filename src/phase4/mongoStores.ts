@@ -113,7 +113,9 @@ export class MongoInvoiceReader implements InvoiceReader {
     const docs = await Invoice.find(filter).sort({ _id: -1 }).limit(limit).lean();
     return docs.map((d: any) => ({
       id: String(d._id),
-      invoiceNumber: d.invoiceNumber,
+      invoiceNumber: d.displayNumber || d.snapshot?.displayNumber || d.invoiceNumber,
+      templateVersionId: d.snapshot?.templateVersionId ?? null,
+      gst: d.snapshot?.totals && d.snapshot.totals.mode !== "none" ? { mode: d.snapshot.totals.mode, rate: d.snapshot.gstRate ?? 0, tax: (d.snapshot.totals.cgst ?? 0) + (d.snapshot.totals.sgst ?? 0) + (d.snapshot.totals.igst ?? 0) } : null,
       leadId: /^lead:(.+):initial-invoice$/.exec(d.idempotencyKey)?.[1] ?? null,
       status: d.status,
       clientName: d.snapshot?.clientName ?? "",
