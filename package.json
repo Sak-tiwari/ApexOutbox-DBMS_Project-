@@ -18,7 +18,8 @@
     "test:integration": "vitest run tests/integration",
     "test:legacy": "tsx src/tests/transition.test.ts",
     "audit": "npm audit --omit=dev",
-    "notices": "node scripts/generate-notices.js"
+    "notices": "node scripts/generate-notices.js",
+    "finder:check": "tsx scripts/check-sources.ts"
   },
   "dependencies": {
     "@crawlee/cheerio": "^3.18.2",

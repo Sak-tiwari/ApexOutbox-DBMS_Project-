@@ -43,6 +43,8 @@ logins or CAPTCHAs, which this project does not bypass.
 **Demo mode:** set `LEAD_FINDER_MOCK=true` in `.env` (then restart). Only realistic *sample* requests are used, so a demo never depends on
 the internet or on a site blocking us. The tab shows a "Demo mode" banner. `LEAD_FINDER_DISABLED_SOURCES=reddit,remoteok` switches live sources off.
 
+**Check the live sources from your network:** `npm run finder:check` prints, per source, whether it answered and how many posts matched.
+
 **Hygiene** (one place: `src/leadFinder/http.ts`): identifying user agent, 12 s timeout, 2 retries with exponential backoff for network errors and 5xx,
 1 s minimum gap per host, 3 MB size cap, 10-minute cache for identical requests, HTTP 401/403/429 reported as "blocked" and never retried.
 

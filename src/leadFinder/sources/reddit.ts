@@ -22,7 +22,8 @@ export function redditSource(opts: { baseUrl?: string; subreddits?: Array<{ name
       let okSubs = 0;
       for (const sub of subs) {
         try {
-          const body = JSON.parse(await ctx.get(`${base}/r/${sub.name}/new.json?limit=100&raw_json=1`));
+          // Reddit asks API clients to send "platform:app:version (by /u/name)" as the user agent.
+          const body = JSON.parse(await ctx.get(`${base}/r/${sub.name}/new.json?limit=100&raw_json=1`, { headers: { "user-agent": "web:apexoutbox-leadfinder:1.0 (by /u/apexoutbox-student-project)" } }));
           okSubs++;
           for (const p of (body?.data?.children ?? []) as RedditPost[]) {
             const d = p.data;
