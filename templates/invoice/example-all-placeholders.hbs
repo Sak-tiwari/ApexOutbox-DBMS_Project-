@@ -19,7 +19,7 @@
 <body>
   {{#if business.logo}}<img src="{{business.logo}}" alt="logo" style="max-height:60px">{{/if}}
   <h1>INVOICE {{invoice.number}}</h1>
-  <p>Date: {{invoice.date}} | Due: {{invoice.due_date}} | Currency: {{invoice.currency}} | Status: {{invoice.status}}</p>
+  <p>Date: {{invoice.date}} | Due: {{invoice.due_date}} | Currency: {{invoice.currency}} | Status: {{invoice.status}}{{#if invoice.is_paid}} (paid){{/if}}</p>
 
   <div class="box"><b>From</b><br>{{business.name}}<br>{{business.address}}<br>State: {{business.state}}<br>GSTIN: {{business.gstin}}<br>{{business.email}} | {{business.phone}}</div>
   <div class="box"><b>Bill to</b><br>{{client.name}}<br>{{client.company}}<br>{{client.address}}<br>State: {{client.state}}<br>GSTIN: {{client.gstin}}<br>{{client.email}}</div>
@@ -35,7 +35,7 @@
 
   <table style="width:50%;margin-left:auto;margin-top:10px">
     <tr><td>Subtotal</td><td class="n">{{totals.subtotal}}</td></tr>
-    <tr><td>Discount</td><td class="n">{{totals.discount}}</td></tr>
+    {{#if totals.has_discount}}<tr><td>Discount</td><td class="n">{{totals.discount}}</td></tr>{{/if}}
     {{#if tax.is_intra}}<tr><td>CGST {{tax.cgst_rate}}</td><td class="n">{{totals.cgst}}</td></tr><tr><td>SGST {{tax.sgst_rate}}</td><td class="n">{{totals.sgst}}</td></tr>{{/if}}
     {{#if tax.is_inter}}<tr><td>IGST {{tax.igst_rate}}</td><td class="n">{{totals.igst}}</td></tr>{{/if}}
     <tr><td><b>Total</b> ({{tax.label}}, GST {{tax.rate}})</td><td class="n"><b>{{totals.total}}</b></td></tr>
